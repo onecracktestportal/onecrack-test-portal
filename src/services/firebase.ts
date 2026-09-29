@@ -537,12 +537,15 @@ export function subscribeToAvailableTests(callback: (tests: TestDefinition[]) =>
 export async function deleteTestDefinition(testId: string): Promise<boolean> {
   try {
     // Remove from local cache of tests
-    const localRaw = localStorage.getItem('cbt_available_tests');
+    const localRaw = localStorage.getItem('cbt_custom_tests');
     if (localRaw) {
       const list = JSON.parse(localRaw) as TestDefinition[];
       const filtered = list.filter(t => t.id !== testId);
-      localStorage.setItem('cbt_available_tests', JSON.stringify(filtered));
+      localStorage.setItem('cbt_custom_tests', JSON.stringify(filtered));
     }
+    try {
+      window.dispatchEvent(new CustomEvent('cbt_tests_updated', { detail: { deletedId: testId } }));
+    } catch { /* ignore */ }
     // Attempt Firestore delete
     try {
       await deleteDoc(doc(db, 'tests', testId));

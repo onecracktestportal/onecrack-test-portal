@@ -565,7 +565,7 @@ export const CandidateLogin: React.FC<CandidateLoginProps> = ({
                   <span>Sign In with Google</span>
                 </button>
               </form>
-            ) : (
+            ) : activeTab === 'register' ? (
               /* TAB: REGISTRATION */
               <form onSubmit={handleRegisterSubmit} className="space-y-3.5">
                 <div>
@@ -611,7 +611,6 @@ export const CandidateLogin: React.FC<CandidateLoginProps> = ({
                     onChange={(e) => { setRegEmail(e.target.value); setOtpSent(false); setOtpVerified(false); setRegOtp(''); }}
                     placeholder="candidate@example.com"
                     required
-                    type="email"
                     className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-white text-xs placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500"
                   />
                 </div>

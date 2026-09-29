@@ -108,14 +108,16 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
           {/* Right candidate info & action badges */}
           <div className="flex items-center gap-3">
-            <button
-              onClick={onSwitchToAdmin}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900 transition-colors"
-              title="Access Admin Console & AI Question Generator"
-            >
-              <Sliders className="w-3.5 h-3.5" />
-              <span>Admin Console</span>
-            </button>
+            {student.role === 'admin' && (
+              <button
+                onClick={onSwitchToAdmin}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900 transition-colors"
+                title="Access Admin Console & AI Question Generator"
+              >
+                <Sliders className="w-3.5 h-3.5" />
+                <span>Admin Console</span>
+              </button>
+            )}
 
             <button
               onClick={onOpenProtocols}
