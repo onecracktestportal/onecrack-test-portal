@@ -15,6 +15,8 @@ import {
 } from 'lucide-react';
 import { Question, ExamSubmission, StudentProfile } from '../types/exam';
 import { OneCrackLogo } from './OneCrackLogo';
+import { jsPDF } from 'jspdf';
+import { generateOneCrackPDFReport } from '../utils/pdfReportGenerator';
 
 interface JEEMainsAnswerKeyModalProps {
   isOpen: boolean;
@@ -51,6 +53,35 @@ export const JEEMainsAnswerKeyModal: React.FC<JEEMainsAnswerKeyModalProps> = ({
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleDownloadPDF = () => {
+    try {
+      const mockTest: any = {
+        id: submission?.testId || 'test-cbt',
+        title: examTitle,
+        chapter: 'NEET Core Syllabus',
+        subject: 'NEET CBT Examination',
+        durationMinutes: 27,
+        questionCount: questions.length,
+        markingScheme: { correct: 4, incorrect: -1, unattempted: 0 },
+        questions: questions
+      };
+
+      const doc = generateOneCrackPDFReport({
+        submission,
+        test: mockTest,
+        candidateName,
+        candidateRoll,
+        candidateAppNo,
+        candidateEmail
+      });
+
+      doc.save(`OneCrack_Detailed_AnswerKey_${candidateRoll}_${Date.now()}.pdf`);
+    } catch (err) {
+      console.error("PDF generation failed:", err);
+      window.print();
+    }
   };
 
   const handleDownloadJSON = () => {

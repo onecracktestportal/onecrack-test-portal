@@ -10,7 +10,8 @@ import {
   query, 
   where, 
   orderBy, 
-  limit 
+  limit,
+  onSnapshot
 } from 'firebase/firestore';
 import { 
   getAuth, 
@@ -90,22 +91,33 @@ export async function registerStudentWithCredentials(
   profileData: Omit<StudentProfile, 'systemId' | 'examCenter' | 'isRegistered' | 'registeredAt'>,
   password?: string
 ): Promise<StudentProfile> {
-  const customUid = profileData.uid.trim() || `OC-APP-${Date.now().toString().slice(-6)}`;
-  
-  let firebaseUid = customUid;
+  // Respect candidate's chosen UID or generate strict clean UID
+  const cleanUid = profileData.uid?.trim() 
+    ? profileData.uid.trim() 
+    : `UID-${Math.floor(100000 + Math.random() * 900000)}`;
+
+  let firebaseUid = cleanUid;
   if (profileData.email && password && password.length >= 6) {
     try {
       const cred = await createUserWithEmailAndPassword(auth, profileData.email, password);
-      firebaseUid = cred.user.uid;
+      if (cred.user?.uid) {
+        firebaseUid = cred.user.uid;
+      }
     } catch (err: unknown) {
       console.warn("Firebase Auth account creation notice:", err);
     }
   }
 
+  const generatedRoll = profileData.rollNumber?.startsWith('OC-') ? profileData.rollNumber : generateOCRollNumber();
+  const generatedAppNo = profileData.applicationNumber?.trim() 
+    ? profileData.applicationNumber.trim() 
+    : `NEET2026-NTA-${Math.floor(100000 + Math.random() * 900000)}`;
+
   const fullProfile: StudentProfile = {
     ...profileData,
-    uid: firebaseUid,
-    rollNumber: profileData.rollNumber?.startsWith('OC') ? profileData.rollNumber : generateOCRollNumber(),
+    uid: cleanUid,
+    applicationNumber: generatedAppNo,
+    rollNumber: generatedRoll,
     systemId: `LAB-02 / NODE-${Math.floor(10 + Math.random() * 89)}`,
     examCenter: 'OneCrack CBT Testing Hub - Sector 62 (Evaluation Block)',
     role: profileData.role || 'student',
@@ -113,9 +125,13 @@ export async function registerStudentWithCredentials(
     registeredAt: new Date().toISOString()
   };
 
+  // Save to Firestore under both cleanUid and firebaseUid
   try {
     const studentRef = doc(db, 'students', fullProfile.uid);
     await setDoc(studentRef, fullProfile);
+    if (firebaseUid && firebaseUid !== fullProfile.uid) {
+      await setDoc(doc(db, 'students', firebaseUid), fullProfile);
+    }
   } catch (err) {
     console.warn("Could not save to Firestore directly, persisting locally:", err);
   }
@@ -131,10 +147,11 @@ export async function registerStudentWithCredentials(
     // Non-blocking
   }
 
-  // Also save credentials locally for offline / UID login
+  // Save credentials locally for instant offline / UID login
   const usersRaw = localStorage.getItem('cbt_registered_users');
   const userMap: Record<string, { profile: StudentProfile; passwordHash?: string }> = usersRaw ? JSON.parse(usersRaw) : {};
   userMap[fullProfile.uid] = { profile: fullProfile, passwordHash: password || 'default' };
+  userMap[fullProfile.uid.toLowerCase()] = { profile: fullProfile, passwordHash: password || 'default' };
   userMap[fullProfile.applicationNumber] = { profile: fullProfile, passwordHash: password || 'default' };
   userMap[fullProfile.rollNumber] = { profile: fullProfile, passwordHash: password || 'default' };
   if (fullProfile.email) {
@@ -142,6 +159,12 @@ export async function registerStudentWithCredentials(
   }
   localStorage.setItem('cbt_registered_users', JSON.stringify(userMap));
   localStorage.setItem('cbt_active_student', JSON.stringify(fullProfile));
+
+  try {
+    window.dispatchEvent(new CustomEvent('cbt_students_updated', { detail: fullProfile }));
+  } catch {
+    // Ignore in non-browser context
+  }
 
   return fullProfile;
 }
@@ -156,7 +179,7 @@ export async function loginStudentWithCredentials(
   // Official Admin Access (ADMIN / 6767)
   if (trimmed.toUpperCase() === 'ADMIN' && password === '6767') {
     const adminProfile: StudentProfile = {
-      uid: 'ADMIN-001',
+      uid: 'ADMIN',
       name: 'Chief Examination Controller',
       email: 'onecracktestportal@gmail.com',
       category: 'General / Unreserved (UR)',
@@ -173,23 +196,18 @@ export async function loginStudentWithCredentials(
     return adminProfile;
   }
 
-  // Try Firebase Auth if identifier is an email
-  if (trimmed.includes('@') && password) {
-    try {
-      const cred = await signInWithEmailAndPassword(auth, trimmed, password);
-      const studentRef = doc(db, 'students', cred.user.uid);
-      const snap = await getDoc(studentRef);
-      if (snap.exists()) {
-        const profile = snap.data() as StudentProfile;
-        localStorage.setItem('cbt_active_student', JSON.stringify(profile));
-        return profile;
-      }
-    } catch {
-      // Fallback to local and direct search
+  // 1. Try Local Registered Users map first for instant access
+  const usersRaw = localStorage.getItem('cbt_registered_users');
+  if (usersRaw) {
+    const userMap: Record<string, { profile: StudentProfile; passwordHash?: string }> = JSON.parse(usersRaw);
+    const found = userMap[trimmed] || userMap[trimmed.toLowerCase()] || userMap[trimmed.toUpperCase()];
+    if (found) {
+      localStorage.setItem('cbt_active_student', JSON.stringify(found.profile));
+      return found.profile;
     }
   }
 
-  // Lookup in Firestore by UID
+  // 2. Try direct Firestore lookup by document ID
   try {
     const studentRef = doc(db, 'students', trimmed);
     const snap = await getDoc(studentRef);
@@ -202,15 +220,60 @@ export async function loginStudentWithCredentials(
     console.warn("Firestore lookup failed:", err);
   }
 
-  // Lookup in local registered users
-  const usersRaw = localStorage.getItem('cbt_registered_users');
-  if (usersRaw) {
-    const userMap: Record<string, { profile: StudentProfile; passwordHash?: string }> = JSON.parse(usersRaw);
-    const found = userMap[trimmed] || userMap[trimmed.toLowerCase()] || userMap[trimmed.toUpperCase()];
-    if (found) {
-      localStorage.setItem('cbt_active_student', JSON.stringify(found.profile));
-      return found.profile;
+  // 3. Query Firestore across Roll Number, Application Number, Email
+  try {
+    const studentsCol = collection(db, 'students');
+    const queries = [
+      query(studentsCol, where('rollNumber', '==', trimmed)),
+      query(studentsCol, where('applicationNumber', '==', trimmed)),
+      query(studentsCol, where('email', '==', trimmed.toLowerCase()))
+    ];
+
+    for (const q of queries) {
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        const profile = snap.docs[0].data() as StudentProfile;
+        localStorage.setItem('cbt_active_student', JSON.stringify(profile));
+        return profile;
+      }
     }
+  } catch (err) {
+    console.warn("Firestore multi-query notice:", err);
+  }
+
+  // 4. Try Firebase Auth if identifier is an email
+  if (trimmed.includes('@') && password) {
+    try {
+      const cred = await signInWithEmailAndPassword(auth, trimmed, password);
+      const studentRef = doc(db, 'students', cred.user.uid);
+      const snap = await getDoc(studentRef);
+      if (snap.exists()) {
+        const profile = snap.data() as StudentProfile;
+        localStorage.setItem('cbt_active_student', JSON.stringify(profile));
+        return profile;
+      }
+    } catch {
+      // Fallback
+    }
+  }
+
+  // 5. Query Cloud SQL PostgreSQL backend
+  try {
+    const sqlResp = await fetch(`/api/sql/student/${encodeURIComponent(trimmed)}`);
+    if (sqlResp.ok) {
+      const sqlData = await sqlResp.json();
+      if (sqlData.success && sqlData.student) {
+        const profile: StudentProfile = {
+          ...sqlData.student,
+          isRegistered: true,
+          registeredAt: sqlData.student.createdAt || new Date().toISOString()
+        };
+        localStorage.setItem('cbt_active_student', JSON.stringify(profile));
+        return profile;
+      }
+    }
+  } catch {
+    // Non-blocking
   }
 
   throw new Error("Candidate credentials not found. Please register as a new candidate first.");
@@ -383,7 +446,87 @@ export async function saveTestDefinition(test: TestDefinition): Promise<boolean>
   const existingTests: TestDefinition[] = existingRaw ? JSON.parse(existingRaw) : [];
   const updated = [test, ...existingTests.filter(t => t.id !== test.id)];
   localStorage.setItem('cbt_custom_tests', JSON.stringify(updated));
+
+  // Dispatch real-time update event across portal
+  try {
+    window.dispatchEvent(new CustomEvent('cbt_tests_updated', { detail: test }));
+  } catch {
+    // Ignore in non-browser context
+  }
+
   return true;
+}
+
+// Real-Time subscription for Available Tests across Candidate Portal & Admin
+export function subscribeToAvailableTests(callback: (tests: TestDefinition[]) => void): () => void {
+  let isSubscribed = true;
+
+  // Initial load
+  fetchAvailableTests().then((initial) => {
+    if (isSubscribed) callback(initial);
+  });
+
+  // 1. Real-time Firestore onSnapshot listener
+  let unsubscribeFirestore = () => {};
+  try {
+    const testsColl = collection(db, 'tests');
+    unsubscribeFirestore = onSnapshot(testsColl, (snapshot) => {
+      if (!isSubscribed) return;
+      const combined: TestDefinition[] = [...DEFAULT_AVAILABLE_TESTS];
+
+      snapshot.docs.forEach((docSnap) => {
+        const data = docSnap.data();
+        const parsedQuestions = typeof data.questions === 'string' ? JSON.parse(data.questions) : data.questions;
+        const testItem: TestDefinition = {
+          ...data,
+          id: docSnap.id,
+          questions: parsedQuestions
+        } as TestDefinition;
+        if (!combined.some(t => t.id === testItem.id)) {
+          combined.push(testItem);
+        }
+      });
+
+      // Overlay local custom tests if not present
+      const localRaw = localStorage.getItem('cbt_custom_tests');
+      if (localRaw) {
+        try {
+          const localTests: TestDefinition[] = JSON.parse(localRaw);
+          localTests.forEach(lt => {
+            if (!combined.some(t => t.id === lt.id)) {
+              combined.push(lt);
+            }
+          });
+        } catch {
+          // ignore
+        }
+      }
+
+      callback(combined);
+    }, (err) => {
+      console.warn("Firestore onSnapshot tests listener notice:", err);
+    });
+  } catch (err) {
+    console.warn("Could not attach Firestore onSnapshot:", err);
+  }
+
+  // 2. Window event listeners for immediate local real-time sync across tabs & components
+  const handleUpdateEvent = () => {
+    if (!isSubscribed) return;
+    fetchAvailableTests().then((updated) => {
+      if (isSubscribed) callback(updated);
+    });
+  };
+
+  window.addEventListener('cbt_tests_updated', handleUpdateEvent);
+  window.addEventListener('storage', handleUpdateEvent);
+
+  return () => {
+    isSubscribed = false;
+    unsubscribeFirestore();
+    window.removeEventListener('cbt_tests_updated', handleUpdateEvent);
+    window.removeEventListener('storage', handleUpdateEvent);
+  };
 }
 
 // Fetch all available tests (combines default syllabus tests with custom/AI generated tests)

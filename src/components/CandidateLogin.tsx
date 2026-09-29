@@ -149,10 +149,11 @@ export const CandidateLogin: React.FC<CandidateLoginProps> = ({
     setIsSubmitting(true);
     try {
       const ocRoll = generateOCRollNumber();
-      const generatedAppNo = regUid.trim() ? regUid.trim() : `NEET2026-NTA-${Math.floor(10000 + Math.random() * 90000)}`;
+      const candidateCustomUid = regUid.trim() ? regUid.trim() : ocRoll;
+      const generatedAppNo = regUid.trim() ? regUid.trim() : `NEET2026-NTA-${Math.floor(100000 + Math.random() * 900000)}`;
       
       const newStudent = await registerStudentWithCredentials({
-        uid: ocRoll,
+        uid: candidateCustomUid,
         name: regName.trim(),
         email: regEmail.trim(),
         category: regCategory,
@@ -164,6 +165,7 @@ export const CandidateLogin: React.FC<CandidateLoginProps> = ({
       }, regPassword);
 
       setActiveCandidate(newStudent);
+      setLoginIdentifier(candidateCustomUid);
       setActiveTab('login');
     } catch (err: any) {
       setErrorMessage(err?.message || "Registration failed. Please try again.");
@@ -406,6 +408,22 @@ export const CandidateLogin: React.FC<CandidateLoginProps> = ({
             ) : (
               /* TAB: REGISTRATION */
               <form onSubmit={handleRegisterSubmit} className="space-y-3.5">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Custom UID / Candidate ID (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={regUid}
+                    onChange={(e) => setRegUid(e.target.value)}
+                    placeholder="e.g. UID-849201 or custom identifier (or leave blank to auto-generate)"
+                    className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-white text-xs placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 font-mono"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-0.5">
+                    You can use this UID or your generated OC Roll Number to sign in from any device.
+                  </p>
+                </div>
+
                 <div>
                   <label className="block text-xs font-semibold text-slate-300 mb-1">
                     Candidate Full Name *

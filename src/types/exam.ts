@@ -27,6 +27,16 @@ export interface Question {
   difficulty: 'Easy' | 'Medium' | 'Hard';
   ncertRef: string;
   explanation: string;
+  pyqYear?: string; // e.g. "NEET 2024", "NEET 2022 Phase-1", "AIPMT 2018"
+  peerStats?: {
+    correctPercent: number;
+    distractorAPercent?: number;
+    distractorBPercent?: number;
+    distractorCPercent?: number;
+    distractorDPercent?: number;
+    unattemptedPercent?: number;
+    avgTimeSpentSeconds?: number;
+  };
 }
 
 export interface TestDefinition {

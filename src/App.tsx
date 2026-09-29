@@ -17,6 +17,7 @@ import { JEEMainsAnswerKeyModal } from './components/JEEMainsAnswerKeyModal';
 import { ProtocolsAndCorrectionModal } from './components/ProtocolsAndCorrectionModal';
 import { TestStartAnimationModal } from './components/TestStartAnimationModal';
 import { saveTestSubmission } from './services/firebase';
+import { Layers, X } from 'lucide-react';
 
 const defaultBiotechTest: TestDefinition = {
   id: 'test-biotech-50q',
@@ -71,6 +72,7 @@ export default function App() {
   const [answerKeyTest, setAnswerKeyTest] = useState<TestDefinition | null>(null);
   const [answerKeySubmission, setAnswerKeySubmission] = useState<ExamSubmission | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [isMobilePaletteOpen, setIsMobilePaletteOpen] = useState<boolean>(false);
 
   // Completed Submission for Scorecard View
   const [completedSubmission, setCompletedSubmission] = useState<ExamSubmission | null>(null);
@@ -447,37 +449,87 @@ export default function App() {
             examTitle={currentActiveTest?.title}
             totalQuestions={questions.length}
             onExitToDashboard={() => setAppState('dashboard')}
+            onToggleMobilePalette={() => setIsMobilePaletteOpen(true)}
           />
 
           {/* Main Question & Palette Area */}
-          <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+          <div className="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
             {/* Left: Question Viewer */}
-            <QuestionViewer
-              question={questions[currentQuestionIndex]}
-              questionNumber={currentQuestionIndex + 1}
-              totalQuestions={questions.length}
-              selectedOption={responses[questions[currentQuestionIndex].id] || null}
-              currentStatus={questionStatuses[questions[currentQuestionIndex].id] || 'not_visited'}
-              language={language}
-              onSelectOption={handleSelectOption}
-              onClearResponse={handleClearResponse}
-              onSaveAndNext={handleSaveAndNext}
-              onSaveAndMarkForReview={handleSaveAndMarkForReview}
-              onMarkForReviewAndNext={handleMarkForReviewAndNext}
-              onPrevious={() => navigateToQuestion(currentQuestionIndex - 1)}
-              onNext={() => navigateToQuestion(currentQuestionIndex + 1)}
-              onLanguageChange={setLanguage}
-            />
+            <div className="flex-1 flex flex-col h-full overflow-hidden">
+              <QuestionViewer
+                question={questions[currentQuestionIndex]}
+                questionNumber={currentQuestionIndex + 1}
+                totalQuestions={questions.length}
+                selectedOption={responses[questions[currentQuestionIndex].id] || null}
+                currentStatus={questionStatuses[questions[currentQuestionIndex].id] || 'not_visited'}
+                language={language}
+                onSelectOption={handleSelectOption}
+                onClearResponse={handleClearResponse}
+                onSaveAndNext={handleSaveAndNext}
+                onSaveAndMarkForReview={handleSaveAndMarkForReview}
+                onMarkForReviewAndNext={handleMarkForReviewAndNext}
+                onPrevious={() => navigateToQuestion(currentQuestionIndex - 1)}
+                onNext={() => navigateToQuestion(currentQuestionIndex + 1)}
+                onLanguageChange={setLanguage}
+              />
+            </div>
 
-            {/* Right: Question Palette */}
-            <QuestionPalette
-              questions={questions}
-              currentQuestionIndex={currentQuestionIndex}
-              questionStatuses={questionStatuses}
-              responses={responses}
-              onSelectQuestion={navigateToQuestion}
-              onSubmitExam={() => setIsSummaryModalOpen(true)}
-            />
+            {/* Desktop Right: Question Palette (visible on lg screens) */}
+            <div className="hidden lg:flex h-full w-80 shrink-0">
+              <QuestionPalette
+                questions={questions}
+                currentQuestionIndex={currentQuestionIndex}
+                questionStatuses={questionStatuses}
+                responses={responses}
+                onSelectQuestion={navigateToQuestion}
+                onSubmitExam={() => setIsSummaryModalOpen(true)}
+              />
+            </div>
+
+            {/* Mobile Floating Palette Button (visible on mobile screens) */}
+            <button
+              onClick={() => setIsMobilePaletteOpen(true)}
+              className="lg:hidden fixed bottom-16 right-4 z-30 flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold text-xs rounded-full shadow-lg shadow-cyan-600/40 border border-white/20 active:scale-95 transition"
+            >
+              <Layers className="w-4 h-4 text-cyan-200" />
+              <span>Palette ({questions.length})</span>
+            </button>
+
+            {/* Mobile Question Palette Drawer Modal */}
+            {isMobilePaletteOpen && (
+              <div className="lg:hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex flex-col justify-end animate-fadeIn">
+                <div className="bg-white rounded-t-2xl max-h-[85vh] flex flex-col overflow-hidden shadow-2xl">
+                  <div className="p-3.5 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
+                    <span className="font-bold text-xs sm:text-sm flex items-center gap-2">
+                      <Layers className="w-4 h-4 text-cyan-400" />
+                      <span>Question Navigation Palette ({questions.length} Questions)</span>
+                    </span>
+                    <button
+                      onClick={() => setIsMobilePaletteOpen(false)}
+                      className="p-1 rounded-lg bg-slate-800 text-slate-300 hover:text-white"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                  <div className="flex-1 overflow-y-auto max-h-[70vh]">
+                    <QuestionPalette
+                      questions={questions}
+                      currentQuestionIndex={currentQuestionIndex}
+                      questionStatuses={questionStatuses}
+                      responses={responses}
+                      onSelectQuestion={(idx) => {
+                        navigateToQuestion(idx);
+                        setIsMobilePaletteOpen(false);
+                      }}
+                      onSubmitExam={() => {
+                        setIsMobilePaletteOpen(false);
+                        setIsSummaryModalOpen(true);
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

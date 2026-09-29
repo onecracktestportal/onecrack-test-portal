@@ -34,12 +34,12 @@ export const QuestionPalette: React.FC<QuestionPaletteProps> = ({
     const status = questionStatuses[q.id] || 'not_visited';
     if (status === 'answered') counts.answered++;
     else if (status === 'not_answered') counts.not_answered++;
-    else if (status === 'marked_review') counts.marked_review++;
     else if (status === 'answered_marked') counts.answered_marked++;
     else counts.not_visited++;
   });
 
-  const topics = ['All', 'Tools of rDNA Technology', 'Processes of rDNA Technology', 'Biotech in Agriculture', 'Biotech in Medicine & Ethics'];
+  // Derive unique topics dynamically from current test questions
+  const topics = ['All', ...Array.from(new Set(questions.map(q => q.topic).filter(Boolean)))];
 
   const filteredQuestions = selectedTopicFilter === 'All' 
     ? questions 

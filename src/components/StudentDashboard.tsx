@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { StudentProfile, TestDefinition, ExamSubmission } from '../types/exam';
 import { OneCrackLogo } from './OneCrackLogo';
-import { fetchAvailableTests, fetchSubmissionsForStudent } from '../services/firebase';
+import { subscribeToAvailableTests, fetchSubmissionsForStudent } from '../services/firebase';
 import { 
   ResponsiveContainer, 
   LineChart, 
@@ -55,18 +55,19 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   const [activeTab, setActiveTab] = useState<'tests' | 'analytics' | 'history'>('tests');
 
   useEffect(() => {
-    async function loadData() {
-      setLoading(true);
-      const available = await fetchAvailableTests();
-      setTests(available);
-
-      if (student.uid) {
-        const subs = await fetchSubmissionsForStudent(student.uid);
-        setPastSubmissions(subs);
-      }
+    // Real-time tests subscription
+    const unsubscribeTests = subscribeToAvailableTests((latestTests) => {
+      setTests(latestTests);
       setLoading(false);
+    });
+
+    if (student.uid) {
+      fetchSubmissionsForStudent(student.uid).then(subs => setPastSubmissions(subs));
     }
-    loadData();
+
+    return () => {
+      unsubscribeTests();
+    };
   }, [student.uid]);
 
   // Find latest submission for each test

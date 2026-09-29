@@ -8,7 +8,8 @@ import {
   Calendar,
   AlertTriangle,
   ArrowLeft,
-  Flame
+  Flame,
+  Layers
 } from 'lucide-react';
 import { OneCrackLogo } from './OneCrackLogo';
 
@@ -22,6 +23,7 @@ interface CBTHeaderProps {
   examTitle?: string;
   totalQuestions?: number;
   onExitToDashboard?: () => void;
+  onToggleMobilePalette?: () => void;
 }
 
 export const CBTHeader: React.FC<CBTHeaderProps> = ({
@@ -33,7 +35,8 @@ export const CBTHeader: React.FC<CBTHeaderProps> = ({
   tabSwitches,
   examTitle = 'BIOTECHNOLOGY: PRINCIPLES & APPLICATIONS',
   totalQuestions = 50,
-  onExitToDashboard
+  onExitToDashboard,
+  onToggleMobilePalette
 }) => {
   const [currentDateTime, setCurrentDateTime] = useState<Date>(new Date());
 
@@ -210,6 +213,18 @@ export const CBTHeader: React.FC<CBTHeaderProps> = ({
               <span>Question Paper</span>
             </button>
           </div>
+
+          {/* Mobile Question Palette Toggle */}
+          {onToggleMobilePalette && (
+            <button
+              onClick={onToggleMobilePalette}
+              className="lg:hidden flex items-center gap-1 text-xs bg-cyan-700 hover:bg-cyan-600 text-white px-2.5 py-1.5 rounded-lg font-bold transition shadow-sm cursor-pointer"
+              title="Open Question Palette"
+            >
+              <Layers className="w-3.5 h-3.5 text-cyan-200" />
+              <span>Grid ({totalQuestions})</span>
+            </button>
+          )}
 
           {/* Student Profile Card with OC Roll Number */}
           <div className="flex items-center gap-2.5 bg-slate-950/80 pl-2 pr-3 py-1.5 rounded-lg border border-slate-800">

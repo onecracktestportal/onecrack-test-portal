@@ -43,6 +43,7 @@ import {
   AreaChart
 } from 'recharts';
 import { sendScorecardEmail, generateScorecardEmailContent } from '../services/emailService';
+import { generateOneCrackPDFReport } from '../utils/pdfReportGenerator';
 import { fetchSubmissionsForStudent } from '../services/firebase';
 import { ProtocolsAndCorrectionModal } from './ProtocolsAndCorrectionModal';
 import { OneCrackLogo } from './OneCrackLogo';
@@ -158,13 +159,33 @@ export const ScorecardView: React.FC<ScorecardViewProps> = ({
   };
 
   const handleDownloadReport = () => {
-    const originalTitle = document.title;
-    const roll = submission.rollNumber || student.rollNumber || 'OC-ASPIRANT';
-    document.title = `OneCrack_Scorecard_Report_${roll}_${submission.id}`;
-    window.print();
-    setTimeout(() => {
-      document.title = originalTitle;
-    }, 1500);
+    try {
+      const roll = submission.rollNumber || student.rollNumber || 'OC-ASPIRANT';
+      const mockTest: any = {
+        id: submission.testId || 'test-cbt',
+        title: submission.testTitle || 'NEET Examination Assessment',
+        chapter: 'NEET Core Curriculum',
+        subject: 'NEET-UG CBT',
+        durationMinutes: 27,
+        questionCount: questions.length,
+        markingScheme: { correct: 4, incorrect: -1, unattempted: 0 },
+        questions: questions
+      };
+
+      const doc = generateOneCrackPDFReport({
+        submission,
+        test: mockTest,
+        candidateName: student.name || submission.studentName,
+        candidateRoll: roll,
+        candidateAppNo: student.applicationNumber || submission.applicationNumber,
+        candidateEmail: student.email || submission.studentEmail
+      });
+
+      doc.save(`OneCrack_Official_Scorecard_${roll}_${Date.now()}.pdf`);
+    } catch (err) {
+      console.error("PDF generation failed, falling back to print:", err);
+      window.print();
+    }
   };
 
   const handleFetchGroundedExplanation = async (question: Question) => {
