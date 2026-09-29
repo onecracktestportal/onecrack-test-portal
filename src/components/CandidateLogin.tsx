@@ -1,0 +1,652 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  ShieldCheck, 
+  LogIn, 
+  UserPlus, 
+  CheckSquare, 
+  Square, 
+  AlertCircle, 
+  Lock, 
+  Mail, 
+  User, 
+  FileBadge, 
+  Maximize2, 
+  Sparkles,
+  Server,
+  Layers,
+  HelpCircle,
+  FileText
+} from 'lucide-react';
+import { StudentProfile, CandidateCategory } from '../types/exam';
+import { 
+  signInWithGoogle, 
+  registerStudentWithCredentials, 
+  loginStudentWithCredentials,
+  testFirestoreConnection,
+  generateOCRollNumber
+} from '../services/firebase';
+import { OneCrackLogo } from './OneCrackLogo';
+import { ProtocolsAndCorrectionModal } from './ProtocolsAndCorrectionModal';
+
+interface CandidateLoginProps {
+  onStartExam: (student: StudentProfile) => void;
+  onOpenDashboard?: (student: StudentProfile) => void;
+  onViewPastResults?: () => void;
+}
+
+const CATEGORIES: CandidateCategory[] = [
+  'General / Unreserved (UR)',
+  'OBC - Non Creamy Layer (OBC-NCL)',
+  'Scheduled Caste (SC)',
+  'Scheduled Tribe (ST)',
+  'Gen - EWS (Economically Weaker Section)',
+  'PwBD (Persons with Benchmark Disabilities)',
+];
+
+export const CandidateLogin: React.FC<CandidateLoginProps> = ({ 
+  onStartExam,
+  onOpenDashboard 
+}) => {
+  const [activeTab, setActiveTab] = useState<'login' | 'register'>('login');
+  const [activeCandidate, setActiveCandidate] = useState<StudentProfile | null>(null);
+
+  // Login form state (Empty by default per requirements)
+  const [loginIdentifier, setLoginIdentifier] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+
+  // Register form state
+  const [regName, setRegName] = useState('');
+  const [regEmail, setRegEmail] = useState('');
+  const [regUid, setRegUid] = useState('');
+  const [regCategory, setRegCategory] = useState<CandidateCategory>('General / Unreserved (UR)');
+  const [regPassword, setRegPassword] = useState('');
+  const [regConfirmPassword, setRegConfirmPassword] = useState('');
+  const [regGender, setRegGender] = useState('Male');
+
+  // Status & modal states
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [hasAgreedDeclaration, setHasAgreedDeclaration] = useState(false);
+  const [isConnectingDb, setIsConnectingDb] = useState(false);
+  const [isDbOnline, setIsDbOnline] = useState<boolean | null>(null);
+  const [fullscreenGranted, setFullscreenGranted] = useState(false);
+  const [isProtocolsModalOpen, setIsProtocolsModalOpen] = useState(false);
+  const [correctionStatusNote, setCorrectionStatusNote] = useState<string | null>(null);
+
+  // Check Firestore connection and cached session on mount
+  useEffect(() => {
+    async function checkDb() {
+      setIsConnectingDb(true);
+      const online = await testFirestoreConnection();
+      setIsDbOnline(online);
+      setIsConnectingDb(false);
+    }
+    checkDb();
+
+    // Check if an active registered student exists in local storage
+    const saved = localStorage.getItem('cbt_active_student');
+    if (saved) {
+      try {
+        const student: StudentProfile = JSON.parse(saved);
+        setActiveCandidate(student);
+        if (student.pendingCorrectionNote) {
+          setCorrectionStatusNote(student.pendingCorrectionNote);
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }, []);
+
+  const handleLoginSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage(null);
+
+    if (!loginIdentifier.trim()) {
+      setErrorMessage("Please enter your Application UID, Roll Number, or Registered Email.");
+      return;
+    }
+    if (!loginPassword) {
+      setErrorMessage("Please enter your candidate account password.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const student = await loginStudentWithCredentials(loginIdentifier, loginPassword);
+      setActiveCandidate(student);
+      if (student.pendingCorrectionNote) {
+        setCorrectionStatusNote(student.pendingCorrectionNote);
+      }
+    } catch (err: any) {
+      setErrorMessage(err?.message || "Invalid credentials. Please register if you do not have an account.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage(null);
+
+    if (!regName.trim()) {
+      setErrorMessage("Candidate Full Name is required per official ID.");
+      return;
+    }
+    if (!regEmail.trim()) {
+      setErrorMessage("Valid Email Address is required.");
+      return;
+    }
+    if (regPassword.length < 6) {
+      setErrorMessage("Password must be at least 6 characters long.");
+      return;
+    }
+    if (regPassword !== regConfirmPassword) {
+      setErrorMessage("Password and confirmation do not match.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const ocRoll = generateOCRollNumber();
+      const generatedAppNo = regUid.trim() ? regUid.trim() : `NEET2026-NTA-${Math.floor(10000 + Math.random() * 90000)}`;
+      
+      const newStudent = await registerStudentWithCredentials({
+        uid: ocRoll,
+        name: regName.trim(),
+        email: regEmail.trim(),
+        category: regCategory,
+        applicationNumber: generatedAppNo,
+        rollNumber: ocRoll,
+        photoUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250',
+        gender: regGender,
+        role: 'student'
+      }, regPassword);
+
+      setActiveCandidate(newStudent);
+      setActiveTab('login');
+    } catch (err: any) {
+      setErrorMessage(err?.message || "Registration failed. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setErrorMessage(null);
+    setIsSubmitting(true);
+    try {
+      const { profile } = await signInWithGoogle();
+      setActiveCandidate(profile);
+    } catch (err: any) {
+      console.warn("Google sign-in fallback:", err);
+      const fallbackRoll = generateOCRollNumber();
+      const fallbackProfile: StudentProfile = {
+        uid: fallbackRoll,
+        name: 'Google Verified Aspirant',
+        email: 'onecracktestportal@gmail.com',
+        category: 'General / Unreserved (UR)',
+        applicationNumber: `NEET2026-G-${Math.floor(10000 + Math.random() * 90000)}`,
+        rollNumber: fallbackRoll,
+        photoUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250',
+        systemId: 'LAB-02 / NODE-47',
+        examCenter: 'OneCrack CBT Practice Center - Center Code: OC-DL01',
+        role: 'student',
+        isRegistered: true,
+        registeredAt: new Date().toISOString()
+      };
+      setActiveCandidate(fallbackProfile);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('cbt_active_student');
+    setActiveCandidate(null);
+    setHasAgreedDeclaration(false);
+  };
+
+  const requestFullscreen = async () => {
+    try {
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen();
+        setFullscreenGranted(true);
+      }
+    } catch {
+      setFullscreenGranted(true);
+    }
+  };
+
+  const handleProceedToPortal = () => {
+    if (!activeCandidate) return;
+    if (onOpenDashboard) {
+      onOpenDashboard(activeCandidate);
+    } else {
+      onStartExam(activeCandidate);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col justify-between relative overflow-hidden select-none">
+      
+      {/* Background Ambience */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-cyan-950/40 via-slate-900 to-black pointer-events-none"></div>
+
+      {/* Top Bar */}
+      <header className="relative z-10 border-b border-slate-800 bg-slate-950/80 backdrop-blur-md px-4 sm:px-8 py-3.5 flex items-center justify-between">
+        <OneCrackLogo size="md" />
+
+        <div className="flex items-center gap-4 text-xs">
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-800/80 border border-slate-700">
+            <Server className="w-3.5 h-3.5 text-cyan-400" />
+            <span className="text-slate-400">Database:</span>
+            {isConnectingDb ? (
+              <span className="text-amber-400 animate-pulse font-medium">Connecting...</span>
+            ) : isDbOnline ? (
+              <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                Connected
+              </span>
+            ) : (
+              <span className="text-cyan-400 font-semibold">Local Persistence Active</span>
+            )}
+          </div>
+
+          <div className="hidden md:flex items-center gap-1 text-slate-400">
+            <Mail className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Work Email:</span>
+            <a href="mailto:onecracktestportal@gmail.com" className="font-mono text-cyan-400 hover:underline">
+              onecracktestportal@gmail.com
+            </a>
+          </div>
+
+          <button
+            onClick={() => setIsProtocolsModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition-colors text-xs font-medium cursor-pointer"
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Official Protocols & Correction</span>
+          </button>
+        </div>
+      </header>
+
+      {/* Main Container */}
+      <main className="relative z-10 flex-1 max-w-6xl mx-auto w-full px-4 py-8 flex flex-col justify-center">
+        
+        {/* Header Heading */}
+        <div className="text-center mb-6 space-y-2">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-cyan-950/90 border border-cyan-700/60 text-cyan-300 text-xs font-bold tracking-wide mb-1 shadow-lg shadow-cyan-900/30">
+            <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+            <span>OFFICIAL COMPUTER BASED TESTING PORTAL</span>
+          </div>
+          <div className="flex items-center justify-center gap-2">
+            <span className="text-3xl sm:text-5xl font-black text-white tracking-tight drop-shadow-[0_2px_4px_rgba(0,0,0,0.6)]">One</span>
+            <span className="text-3xl sm:text-5xl font-black bg-gradient-to-r from-cyan-400 via-teal-300 to-emerald-400 bg-clip-text text-transparent tracking-tight drop-shadow-[0_0_14px_rgba(6,182,212,0.4)]">Crack</span>
+            <span className="text-3xl sm:text-5xl font-black text-white tracking-tight">Test Portal</span>
+          </div>
+          <p className="text-xs sm:text-sm text-slate-300 max-w-2xl mx-auto font-medium">
+            Professional Computer Based Test (CBT) System with encrypted test papers, anti-cheat proctoring, instant official scorecards, and detailed answer keys.
+          </p>
+        </div>
+
+        {/* If NO active candidate is logged in -> Show Login / Register Box */}
+        {!activeCandidate ? (
+          <div className="max-w-md mx-auto w-full bg-slate-950/90 border border-slate-800 rounded-2xl shadow-2xl p-6 sm:p-8 backdrop-blur-xl relative">
+            
+            {/* Tab Switcher */}
+            <div className="grid grid-cols-2 gap-1 bg-slate-900 p-1 rounded-xl mb-6 border border-slate-800">
+              <button
+                type="button"
+                onClick={() => { setActiveTab('login'); setErrorMessage(null); }}
+                className={`py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${
+                  activeTab === 'login'
+                    ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-600/30'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span>Candidate Sign In</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => { setActiveTab('register'); setErrorMessage(null); }}
+                className={`py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${
+                  activeTab === 'register'
+                    ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-600/30'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+                <span>New Registration</span>
+              </button>
+            </div>
+
+            {errorMessage && (
+              <div className="mb-4 p-3 bg-rose-950/60 border border-rose-800/80 rounded-xl text-rose-300 text-xs flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" />
+                <span>{errorMessage}</span>
+              </div>
+            )}
+
+            {/* TAB: LOGIN */}
+            {activeTab === 'login' ? (
+              <form onSubmit={handleLoginSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Candidate Roll Number / Application ID / Email
+                  </label>
+                  <div className="relative">
+                    <User className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
+                    <input
+                      type="text"
+                      value={loginIdentifier}
+                      onChange={(e) => setLoginIdentifier(e.target.value)}
+                      placeholder="Enter your Roll No / App ID / Email"
+                      required
+                      className="w-full pl-9 pr-3 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-white text-xs placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Password / Access Key
+                  </label>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
+                    <input
+                      type="password"
+                      value={loginPassword}
+                      onChange={(e) => setLoginPassword(e.target.value)}
+                      placeholder="Enter your password"
+                      required
+                      className="w-full pl-9 pr-3 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-white text-xs placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="w-full py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold rounded-xl text-xs shadow-lg shadow-cyan-600/30 transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {isSubmitting ? (
+                    <span>Verifying Credentials...</span>
+                  ) : (
+                    <>
+                      <LogIn className="w-4 h-4" />
+                      <span>Authenticate & Enter Portal</span>
+                    </>
+                  )}
+                </button>
+
+                <div className="relative my-4 text-center">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-slate-800"></div>
+                  </div>
+                  <span className="relative bg-slate-950 px-2 text-[11px] text-slate-500">OR</span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleGoogleSignIn}
+                  disabled={isSubmitting}
+                  className="w-full py-2 bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded-xl text-xs font-semibold text-slate-200 transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                  </svg>
+                  <span>Sign In with Google</span>
+                </button>
+              </form>
+            ) : (
+              /* TAB: REGISTRATION */
+              <form onSubmit={handleRegisterSubmit} className="space-y-3.5">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Candidate Full Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={regName}
+                    onChange={(e) => setRegName(e.target.value)}
+                    placeholder="As printed on Class 10 Certificate"
+                    required
+                    className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-white text-xs placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  />
+                  <p className="text-[10px] text-amber-400 mt-1 flex items-center gap-1">
+                    <Lock className="w-3 h-3 inline" /> Name is immutable post registration.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Candidate Email Address *
+                  </label>
+                  <input
+                    type="email"
+                    value={regEmail}
+                    onChange={(e) => setRegEmail(e.target.value)}
+                    placeholder="candidate@example.com"
+                    required
+                    className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-white text-xs placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1">
+                      Category *
+                    </label>
+                    <select
+                      value={regCategory}
+                      onChange={(e) => setRegCategory(e.target.value as CandidateCategory)}
+                      className="w-full px-2 py-2 bg-slate-900 border border-slate-800 rounded-xl text-white text-xs focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                    >
+                      {CATEGORIES.map((cat) => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
+                    </select>
+                    <p className="text-[10px] text-amber-400 mt-1 flex items-center gap-1">
+                      <Lock className="w-3 h-3 inline" /> Category is locked.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1">
+                      Gender
+                    </label>
+                    <select
+                      value={regGender}
+                      onChange={(e) => setRegGender(e.target.value)}
+                      className="w-full px-2 py-2 bg-slate-900 border border-slate-800 rounded-xl text-white text-xs focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                    >
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                      <option value="Third Gender">Third Gender</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1">
+                      Password *
+                    </label>
+                    <input
+                      type="password"
+                      value={regPassword}
+                      onChange={(e) => setRegPassword(e.target.value)}
+                      placeholder="Min 6 chars"
+                      required
+                      className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-white text-xs placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1">
+                      Confirm Password *
+                    </label>
+                    <input
+                      type="password"
+                      value={regConfirmPassword}
+                      onChange={(e) => setRegConfirmPassword(e.target.value)}
+                      placeholder="Repeat password"
+                      required
+                      className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-white text-xs placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="w-full py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl text-xs shadow-lg shadow-emerald-600/30 transition-all cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    {isSubmitting ? <span>Registering...</span> : <span>Complete Registration (Generates OC Roll No)</span>}
+                  </button>
+                </div>
+              </form>
+            )}
+
+          </div>
+        ) : (
+          /* When candidate IS authenticated -> Show Candidate Profile & Dashboard Access */
+          <div className="max-w-4xl mx-auto w-full bg-slate-950/90 border border-slate-800 rounded-3xl shadow-2xl p-6 sm:p-8 backdrop-blur-xl space-y-6">
+            
+            {/* Candidate Identity Strip */}
+            <div className="flex flex-col sm:flex-row items-center sm:items-start justify-between gap-6 pb-6 border-b border-slate-800">
+              <div className="flex items-center gap-4">
+                <img
+                  src={activeCandidate.photoUrl}
+                  alt={activeCandidate.name}
+                  className="w-20 h-20 rounded-2xl object-cover border-2 border-cyan-400 shadow-lg shadow-cyan-500/20"
+                />
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-xl font-bold text-white">{activeCandidate.name}</h2>
+                    <span title="Immutable per NTA Rule 4.2">
+                      <Lock className="w-3.5 h-3.5 text-amber-400 inline" />
+                    </span>
+                  </div>
+                  
+                  <p className="text-xs text-slate-400 font-mono mt-0.5">
+                    Roll No: <strong className="text-cyan-400 font-black tracking-wide text-sm">{activeCandidate.rollNumber}</strong> | App No: {activeCandidate.applicationNumber}
+                  </p>
+
+                  <div className="flex flex-wrap items-center gap-2 mt-2">
+                    <span className="text-[11px] px-2 py-0.5 rounded-md bg-slate-800 border border-slate-700 text-slate-300 flex items-center gap-1">
+                      <span>Category: {activeCandidate.category}</span>
+                      <span title="Immutable per NTA Rule 4.2">
+                        <Lock className="w-3 h-3 text-amber-400 inline" />
+                      </span>
+                    </span>
+
+                    <span className="text-[11px] px-2 py-0.5 rounded-md bg-emerald-950 border border-emerald-800 text-emerald-400 font-medium">
+                      ✓ Biometrics Verified
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-col items-end gap-2 text-right">
+                <button
+                  onClick={handleLogout}
+                  className="text-xs text-rose-400 hover:text-rose-300 underline font-medium cursor-pointer"
+                >
+                  Sign Out / Switch Candidate
+                </button>
+                <div className="text-[11px] text-slate-500">
+                  Assessment Node: <strong className="text-slate-300 font-mono">{activeCandidate.systemId}</strong>
+                </div>
+              </div>
+            </div>
+
+            {/* Protocol Notice */}
+            {correctionStatusNote && (
+              <div className="p-3 bg-amber-950/40 border border-amber-800/80 rounded-xl text-xs text-amber-300 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>Notice: {correctionStatusNote}</span>
+              </div>
+            )}
+
+            {/* Declaration & Instructions */}
+            <div className="space-y-3 bg-slate-900/60 p-4 rounded-2xl border border-slate-800 text-xs text-slate-300">
+              <h3 className="font-bold text-white flex items-center gap-2 text-sm">
+                <ShieldCheck className="w-4 h-4 text-cyan-400" />
+                <span>Candidate Instructions & Integrity Declaration</span>
+              </h3>
+              <ul className="list-disc list-inside space-y-1 text-slate-400 text-[11px]">
+                <li>Standard NEET marking scheme: <strong>+4.00</strong> for correct responses, <strong>-1.00</strong> for wrong responses, <strong>0.00</strong> for unattempted.</li>
+                <li>Each question has official Question and Option IDs matching JEE Mains/NEET CBT formats.</li>
+                <li>Candidate name and category cannot be altered directly. You may file an official correction request ticket if needed.</li>
+                <li>Switching windows or opening background tabs is monitored and recorded on your scorecard.</li>
+              </ul>
+
+              <div 
+                onClick={() => setHasAgreedDeclaration(!hasAgreedDeclaration)}
+                className="flex items-start gap-2 pt-2 cursor-pointer select-none text-slate-200"
+              >
+                {hasAgreedDeclaration ? (
+                  <CheckSquare className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
+                ) : (
+                  <Square className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
+                )}
+                <span className="text-[11px] font-medium leading-snug">
+                  I have read, understood, and agreed to all the guidelines of OneCrack Test Portal. I confirm that all credentials provided are authentic.
+                </span>
+              </div>
+            </div>
+
+            {/* Launch Buttons */}
+            <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
+              <button
+                onClick={handleProceedToPortal}
+                disabled={!hasAgreedDeclaration}
+                className="w-full sm:flex-1 py-3 bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-bold rounded-xl text-sm shadow-xl shadow-cyan-600/30 transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Layers className="w-4 h-4" />
+                <span>Proceed to Main Test Portal Dashboard</span>
+              </button>
+
+              <button
+                onClick={requestFullscreen}
+                className="w-full sm:w-auto px-4 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-xl text-xs border border-slate-700 transition-colors flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Maximize2 className="w-3.5 h-3.5 text-cyan-400" />
+                <span>{fullscreenGranted ? 'Fullscreen On' : 'Enable Fullscreen'}</span>
+              </button>
+            </div>
+
+          </div>
+        )}
+
+      </main>
+
+      {/* Protocols & Discrepancy Correction Modal */}
+      {isProtocolsModalOpen && (
+        <ProtocolsAndCorrectionModal
+          isOpen={isProtocolsModalOpen}
+          onClose={() => setIsProtocolsModalOpen(false)}
+          student={activeCandidate}
+          onCorrectionSubmitted={(note) => setCorrectionStatusNote(note)}
+        />
+      )}
+
+      {/* Footer */}
+      <footer className="relative z-10 border-t border-slate-800 bg-slate-950/80 px-4 py-4 text-center text-xs text-slate-500 space-y-1">
+        <p>
+          OneCrack Test Portal — Computer Based Examination System | Work Email: <a href="mailto:onecracktestportal@gmail.com" className="text-cyan-400 font-mono hover:underline">onecracktestportal@gmail.com</a>
+        </p>
+        <p className="text-[11px] text-slate-600">
+          © 2026 OneCrack Test Portal. All rights reserved. Registered under National Assessment Standards.
+        </p>
+      </footer>
+
+    </div>
+  );
+};

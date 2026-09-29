@@ -1,0 +1,198 @@
+{
+  "entities": {
+    "Student": {
+      "title": "Student",
+      "description": "Student candidate profile registered on the NEET test portal with OC roll number",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Unique student identifier"
+        },
+        "name": {
+          "type": "string",
+          "description": "Student's full candidate name (immutable after registration)"
+        },
+        "email": {
+          "type": "string",
+          "description": "Registered email address of the student"
+        },
+        "category": {
+          "type": "string",
+          "description": "Candidate Category (immutable after registration)"
+        },
+        "applicationNumber": {
+          "type": "string",
+          "description": "Application number"
+        },
+        "rollNumber": {
+          "type": "string",
+          "description": "Roll number starting with OC followed by numbers (e.g., OC-849201)"
+        },
+        "photoUrl": {
+          "type": "string",
+          "description": "Candidate avatar data"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Account registration timestamp"
+        }
+      },
+      "required": ["uid", "name", "email", "rollNumber", "createdAt"]
+    },
+    "TestDefinition": {
+      "title": "TestDefinition",
+      "description": "Chapter test definition including questions, option codes, time limits, and marking scheme",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique test identifier"
+        },
+        "title": {
+          "type": "string",
+          "description": "Test title (e.g. Chapter Test: Biotechnology)"
+        },
+        "chapter": {
+          "type": "string",
+          "description": "Subject and chapter name"
+        },
+        "questionCount": {
+          "type": "number",
+          "description": "Total number of questions"
+        },
+        "durationMinutes": {
+          "type": "number",
+          "description": "Test time limit in minutes (e.g. 27)"
+        },
+        "markingScheme": {
+          "type": "string",
+          "description": "e.g. +4 / -1 / 0"
+        },
+        "createdBy": {
+          "type": "string",
+          "description": "Author UID or AI Generator"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp"
+        }
+      },
+      "required": ["id", "title", "chapter", "questionCount", "durationMinutes", "createdAt"]
+    },
+    "TestSubmission": {
+      "title": "TestSubmission",
+      "description": "Complete exam submission record for the NEET chapter test",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique submission ID"
+        },
+        "testId": {
+          "type": "string",
+          "description": "Reference ID of the test attempted"
+        },
+        "studentUid": {
+          "type": "string",
+          "description": "Candidate UID"
+        },
+        "studentName": {
+          "type": "string",
+          "description": "Candidate Name"
+        },
+        "studentEmail": {
+          "type": "string",
+          "description": "Candidate Email"
+        },
+        "rollNumber": {
+          "type": "string",
+          "description": "Candidate OC roll number"
+        },
+        "score": {
+          "type": "number",
+          "description": "Total marks scored"
+        },
+        "totalQuestions": {
+          "type": "number",
+          "description": "Total questions in test"
+        },
+        "correctCount": {
+          "type": "number",
+          "description": "Number of correct answers"
+        },
+        "incorrectCount": {
+          "type": "number",
+          "description": "Number of wrong answers"
+        },
+        "unattemptedCount": {
+          "type": "number",
+          "description": "Number of unattempted questions"
+        },
+        "accuracy": {
+          "type": "number",
+          "description": "Percentage accuracy"
+        },
+        "timeTakenSeconds": {
+          "type": "number",
+          "description": "Duration candidate spent on test in seconds"
+        },
+        "submittedAt": {
+          "type": "string",
+          "description": "Submission ISO timestamp"
+        }
+      },
+      "required": ["id", "studentUid", "score", "correctCount", "incorrectCount", "submittedAt"]
+    },
+    "CorrectionRequest": {
+      "title": "CorrectionRequest",
+      "description": "Candidate request to rectify immutable registration data per NTA examination protocol",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Ticket identifier"
+        },
+        "studentUid": {
+          "type": "string",
+          "description": "Candidate UID"
+        },
+        "requestedField": {
+          "type": "string",
+          "description": "Field candidate wishes to rectify"
+        },
+        "reason": {
+          "type": "string",
+          "description": "Justification and supporting document reference"
+        },
+        "status": {
+          "type": "string",
+          "description": "Pending / Under Review / Rejected / Approved"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Submission timestamp"
+        }
+      },
+      "required": ["id", "studentUid", "requestedField", "reason", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/students/{studentId}": {
+      "schema": "Student",
+      "description": "Collection of all candidate profiles"
+    },
+    "/tests/{testId}": {
+      "schema": "TestDefinition",
+      "description": "Collection of all available chapter tests including AI generated ones"
+    },
+    "/submissions/{submissionId}": {
+      "schema": "TestSubmission",
+      "description": "Collection of test scorecards and answer records"
+    },
+    "/correction_requests/{requestId}": {
+      "schema": "CorrectionRequest",
+      "description": "Collection of official profile correction tickets"
+    }
+  }
+}
