@@ -11,7 +11,8 @@ import {
   where, 
   orderBy, 
   limit,
-  onSnapshot
+  onSnapshot,
+  deleteDoc
 } from 'firebase/firestore';
 import { 
   getAuth, 
@@ -544,7 +545,6 @@ export async function deleteTestDefinition(testId: string): Promise<boolean> {
     }
     // Attempt Firestore delete
     try {
-      const { deleteDoc } = await import('firebase/firestore');
       await deleteDoc(doc(db, 'tests', testId));
     } catch (e) {
       console.warn('Firestore delete non-fatal:', e);

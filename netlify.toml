@@ -1,7 +1,13 @@
 [build]
   command = "npm run build"
   publish = "dist"
+  functions = "netlify/functions"
 
+[functions]
+  node_bundler = "esbuild"
+  external_node_modules = ["nodemailer", "jspdf"]
+
+# SPA fallback (API paths are owned by function config path: /api/*)
 [[redirects]]
   from = "/*"
   to = "/index.html"
