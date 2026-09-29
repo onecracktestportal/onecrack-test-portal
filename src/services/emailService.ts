@@ -73,7 +73,16 @@ export async function sendScorecardEmail(
   submission: ExamSubmission, 
   recipientEmail?: string
 ): Promise<EmailDispatchResult> {
-  const targetEmail = recipientEmail || submission.studentEmail || 'onecracktestportal@gmail.com';
+  const targetEmail = (recipientEmail || submission.studentEmail || '').trim();
+  if (!targetEmail || targetEmail.toLowerCase() === 'onecracktestportal@gmail.com') {
+    return {
+      success: false,
+      message: 'Please enter your personal email address (not the portal mailbox).',
+      dispatchId: '',
+      sentTo: '',
+      timestamp: new Date().toISOString()
+    };
+  }
   const { subject, bodyText } = generateScorecardEmailContent(submission);
 
   // Attempt server-side API or fallback to simulated dispatch with mailto link
@@ -114,7 +123,8 @@ export async function sendScorecardEmail(
 }
 
 export function openMailtoScorecard(submission: ExamSubmission, recipientEmail?: string) {
-  const target = recipientEmail || 'onecracktestportal@gmail.com';
+  const target = (recipientEmail || submission.studentEmail || '').trim();
+  if (!target) return;
   const { subject, bodyText } = generateScorecardEmailContent(submission);
   const mailtoUrl = `mailto:${encodeURIComponent(target)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(bodyText)}`;
   window.open(mailtoUrl, '_blank');

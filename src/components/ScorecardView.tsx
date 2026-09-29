@@ -70,7 +70,12 @@ export const ScorecardView: React.FC<ScorecardViewProps> = ({
   const [emailStatus, setEmailStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const [emailMessage, setEmailMessage] = useState<string>('');
   const [copiedReport, setCopiedReport] = useState(false);
-  const [recipientEmail, setRecipientEmail] = useState(student.email || submission.studentEmail || '');
+  const [recipientEmail, setRecipientEmail] = useState(() => {
+    const e = (student.email || submission.studentEmail || '').trim();
+    // Never auto-fill the portal mailbox — student must enter their own email
+    if (!e || e.toLowerCase() === 'onecracktestportal@gmail.com') return '';
+    return e;
+  });
   const [isProtocolsModalOpen, setIsProtocolsModalOpen] = useState(false);
 
   // Past submissions for Recharts trend graph

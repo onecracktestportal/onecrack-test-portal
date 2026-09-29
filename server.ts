@@ -960,6 +960,163 @@ app.post('/api/sql/correction-request', async (req: Request, res: Response) => {
   }
 });
 
+
+// ==================== OTP & Password Reset System ====================
+const otpStore = new Map<string, { code: string; expiresAt: number; purpose: string }>();
+const resetTokenStore = new Map<string, { email: string; expiresAt: number }>();
+
+function generateOtpCode(): string {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+app.post('/api/auth/send-otp', async (req: Request, res: Response) => {
+  try {
+    const { email, purpose = 'registration' } = req.body;
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ success: false, error: 'Valid email is required' });
+    }
+    const code = generateOtpCode();
+    const key = email.toLowerCase().trim();
+    otpStore.set(key, { code, expiresAt: Date.now() + 10 * 60 * 1000, purpose });
+
+    const purposeLabel = purpose === 'password_reset' ? 'Password Reset' : purpose === 'registration' ? 'Account Registration' : 'Email Verification';
+    await transporter.sendMail({
+      from: '"One Crack Test Portal" <onecracktestportal@gmail.com>',
+      to: email,
+      subject: `[OneCrack] Your ${purposeLabel} OTP: ${code}`,
+      html: `
+        <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 520px; margin: 0 auto; background: #0f172a; color: #e2e8f0; border-radius: 16px; overflow: hidden;">
+          <div style="background: linear-gradient(135deg, #0891b2, #2563eb); padding: 28px 24px; text-align: center;">
+            <h1 style="margin: 0; font-size: 22px; color: #fff; letter-spacing: 1px;">OneCrack Test Portal</h1>
+            <p style="margin: 8px 0 0; font-size: 13px; color: #e0f2fe;">Official CBT Examination System</p>
+          </div>
+          <div style="padding: 32px 24px;">
+            <p style="font-size: 15px; margin: 0 0 8px;">Your one-time verification code for <strong>${purposeLabel}</strong> is:</p>
+            <div style="margin: 24px 0; text-align: center;">
+              <span style="display: inline-block; font-size: 36px; font-weight: 800; letter-spacing: 12px; color: #22d3ee; background: #1e293b; padding: 16px 28px; border-radius: 12px; border: 1px solid #334155;">${code}</span>
+            </div>
+            <p style="font-size: 13px; color: #94a3b8; margin: 0;">This code expires in <strong>10 minutes</strong>. Do not share it with anyone.</p>
+            <p style="font-size: 12px; color: #64748b; margin: 20px 0 0;">If you did not request this, you can safely ignore this email.</p>
+          </div>
+          <div style="padding: 16px 24px; background: #1e293b; text-align: center; font-size: 11px; color: #64748b;">
+            © 2026 One Crack Test Portal · onecracktestportal@gmail.com
+          </div>
+        </div>
+      `,
+      text: `Your OneCrack ${purposeLabel} OTP is: ${code}\nValid for 10 minutes.\nDo not share this code.`
+    });
+
+    res.json({ success: true, message: `OTP sent to ${email}`, expiresInSeconds: 600 });
+  } catch (err: any) {
+    console.error('[OTP Send Error]', err);
+    res.status(500).json({ success: false, error: err?.message || 'Failed to send OTP' });
+  }
+});
+
+app.post('/api/auth/verify-otp', async (req: Request, res: Response) => {
+  try {
+    const { email, code } = req.body;
+    if (!email || !code) {
+      return res.status(400).json({ success: false, error: 'Email and OTP code are required' });
+    }
+    const key = email.toLowerCase().trim();
+    const entry = otpStore.get(key);
+    if (!entry) {
+      return res.status(400).json({ success: false, error: 'No OTP found. Please request a new code.' });
+    }
+    if (Date.now() > entry.expiresAt) {
+      otpStore.delete(key);
+      return res.status(400).json({ success: false, error: 'OTP expired. Please request a new code.' });
+    }
+    if (String(entry.code) !== String(code).trim()) {
+      return res.status(400).json({ success: false, error: 'Invalid OTP code.' });
+    }
+    otpStore.delete(key);
+    res.json({ success: true, message: 'Email verified successfully', purpose: entry.purpose });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Verification failed' });
+  }
+});
+
+app.post('/api/auth/password-reset-request', async (req: Request, res: Response) => {
+  try {
+    const { email } = req.body;
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ success: false, error: 'Valid email is required' });
+    }
+    const code = generateOtpCode();
+    const key = email.toLowerCase().trim();
+    otpStore.set(key, { code, expiresAt: Date.now() + 10 * 60 * 1000, purpose: 'password_reset' });
+    resetTokenStore.set(key, { email: key, expiresAt: Date.now() + 15 * 60 * 1000 });
+
+    await transporter.sendMail({
+      from: '"One Crack Test Portal" <onecracktestportal@gmail.com>',
+      to: email,
+      subject: `[OneCrack] Password Reset OTP: ${code}`,
+      html: `
+        <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 520px; margin: 0 auto; background: #0f172a; color: #e2e8f0; border-radius: 16px; overflow: hidden;">
+          <div style="background: linear-gradient(135deg, #dc2626, #b91c1c); padding: 28px 24px; text-align: center;">
+            <h1 style="margin: 0; font-size: 22px; color: #fff;">Password Reset</h1>
+            <p style="margin: 8px 0 0; font-size: 13px; color: #fecaca;">OneCrack Test Portal Security</p>
+          </div>
+          <div style="padding: 32px 24px;">
+            <p style="font-size: 15px;">Use this OTP to reset your candidate password:</p>
+            <div style="margin: 24px 0; text-align: center;">
+              <span style="display: inline-block; font-size: 36px; font-weight: 800; letter-spacing: 12px; color: #f87171; background: #1e293b; padding: 16px 28px; border-radius: 12px;">${code}</span>
+            </div>
+            <p style="font-size: 13px; color: #94a3b8;">Expires in 10 minutes. If you did not request a reset, ignore this email.</p>
+          </div>
+        </div>
+      `,
+      text: `Your OneCrack Password Reset OTP is: ${code}\nValid for 10 minutes.`
+    });
+
+    res.json({ success: true, message: `Password reset OTP sent to ${email}` });
+  } catch (err: any) {
+    console.error('[Password Reset OTP Error]', err);
+    res.status(500).json({ success: false, error: err?.message || 'Failed to send reset OTP' });
+  }
+});
+
+app.post('/api/auth/password-reset-confirm', async (req: Request, res: Response) => {
+  try {
+    const { email, code, newPassword } = req.body;
+    if (!email || !code || !newPassword || String(newPassword).length < 6) {
+      return res.status(400).json({ success: false, error: 'Email, valid OTP, and new password (min 6 chars) are required' });
+    }
+    const key = email.toLowerCase().trim();
+    const entry = otpStore.get(key);
+    if (!entry || entry.purpose !== 'password_reset') {
+      return res.status(400).json({ success: false, error: 'No valid password-reset OTP found. Request a new one.' });
+    }
+    if (Date.now() > entry.expiresAt) {
+      otpStore.delete(key);
+      return res.status(400).json({ success: false, error: 'OTP expired. Please request a new code.' });
+    }
+    if (String(entry.code) !== String(code).trim()) {
+      return res.status(400).json({ success: false, error: 'Invalid OTP code.' });
+    }
+    otpStore.delete(key);
+    resetTokenStore.delete(key);
+    // Client will update local password store; server acknowledges verification
+    res.json({ success: true, message: 'OTP verified. You may now set the new password.', verified: true });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Reset confirmation failed' });
+  }
+});
+
+// Delete test endpoint for admin
+app.delete('/api/sql/tests/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    // Soft-delete via response; client also removes from Firestore/local
+    res.json({ success: true, deletedId: id, message: `Test ${id} marked for deletion` });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+
 // In development, hook Vite middleware; in production serve static files
 async function startServer() {
   const isDev = process.env.NODE_ENV !== 'production';

@@ -18,10 +18,13 @@ import {
   Brain
 } from 'lucide-react';
 import { TestDefinition, ExamSubmission, StudentProfile } from '../types/exam';
+import { NEET_SYLLABUS, NEET_SUBJECT_LIST } from '../data/neetSyllabus';
 import { OneCrackLogo } from './OneCrackLogo';
 import { 
   fetchAvailableTests, 
-  saveTestDefinition, 
+  saveTestDefinition,
+  deleteTestDefinition,
+  
   fetchAllSubmissions 
 } from '../services/firebase';
 
@@ -81,6 +84,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setQuestionCount(presetCount);
     setDurationMinutes(presetTime);
     setCustomPrompt(presetPrompt);
+  };
+
+  
+  const handleDeleteTest = async (testId: string, title: string) => {
+    if (!window.confirm(`Delete test "${title}" permanently? Students will no longer see it.`)) return;
+    const ok = await deleteTestDefinition(testId);
+    if (ok) {
+      setTests(prev => prev.filter(t => t.id !== testId));
+    } else {
+      alert('Failed to delete test. Please try again.');
+    }
   };
 
   const handleGenerateTestWithAI = async (e: React.FormEvent) => {
@@ -600,6 +614,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     >
                       <Download className="w-3.5 h-3.5 text-cyan-600" />
                       <span>Download Paper & Key</span>
+                    </button>
+                    <button
+                      onClick={() => handleDeleteTest(test.id, test.title)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/40 text-rose-700 dark:text-rose-300 font-semibold text-xs rounded-lg border border-rose-200 dark:border-rose-800 transition-colors"
+                      title="Delete this test"
+                    >
+                      <span>Delete</span>
                     </button>
                   </div>
                 </div>

@@ -388,8 +388,13 @@ export default function App() {
       {appState === 'login' && (
         <CandidateLogin
           onStartExam={(student) => {
+            // Admin never sits exams — always route to control room
             setCurrentStudent(student);
-            initiateTestLaunch(defaultBiotechTest, student);
+            if (student.role === 'admin') {
+              setAppState('admin');
+            } else {
+              setAppState('dashboard');
+            }
           }}
           onOpenDashboard={(student) => {
             setCurrentStudent(student);

@@ -19,6 +19,7 @@ import {
   History
 } from 'lucide-react';
 import { StudentProfile, TestDefinition, ExamSubmission } from '../types/exam';
+import { NEET_SYLLABUS, NEET_SUBJECT_LIST } from '../data/neetSyllabus';
 import { OneCrackLogo } from './OneCrackLogo';
 import { subscribeToAvailableTests, fetchSubmissionsForStudent } from '../services/firebase';
 import { 
@@ -52,7 +53,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   const [tests, setTests] = useState<TestDefinition[]>([]);
   const [pastSubmissions, setPastSubmissions] = useState<ExamSubmission[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'tests' | 'analytics' | 'history'>('tests');
+  const [activeTab, setActiveTab] = useState<'tests' | 'analytics' | 'history' | 'syllabus'>('tests');
+  const [subjectFilter, setSubjectFilter] = useState<string>('All');
 
   useEffect(() => {
     // Real-time tests subscription
@@ -83,6 +85,11 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     date: new Date(sub.submittedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
     title: sub.testTitle || 'Chapter Test'
   }));
+
+  const filteredTests = subjectFilter === 'All'
+    ? tests
+    : tests.filter(t => (t.subject || '').toLowerCase().includes(subjectFilter.toLowerCase()) ||
+        (subjectFilter === 'Biology' && (t.subject || '').toLowerCase().includes('biotech')));
 
   const bestScore = pastSubmissions.reduce((max, s) => Math.max(max, s.score), 0);
   const avgAccuracy = pastSubmissions.length 
@@ -234,6 +241,17 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
             <History className="w-4 h-4" />
             <span>Past Scorecards & Answer Keys</span>
           </button>
+          <button
+            onClick={() => setActiveTab('syllabus')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+              activeTab === 'syllabus'
+                ? 'bg-cyan-600 text-white shadow-md shadow-cyan-600/20'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            <BookOpen className="w-4 h-4" />
+            <span>NEET Syllabus (NTA)</span>
+          </button>
         </div>
 
         {/* TAB 1: AVAILABLE TESTS */}
@@ -261,14 +279,38 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
               </div>
             </div>
 
+            {/* Subject filter */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wide mr-1">Filter by subject:</span>
+              {['All', ...NEET_SUBJECT_LIST].map(subj => (
+                <button
+                  key={subj}
+                  type="button"
+                  onClick={() => setSubjectFilter(subj)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-all cursor-pointer ${
+                    subjectFilter === subj
+                      ? 'bg-cyan-600 text-white border-cyan-600 shadow'
+                      : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-cyan-400'
+                  }`}
+                >
+                  {subj}
+                </button>
+              ))}
+              <span className="text-[11px] text-slate-400 ml-2">{filteredTests.length} test(s)</span>
+            </div>
+
             {loading ? (
               <div className="py-16 text-center text-slate-400">
                 <div className="animate-spin w-8 h-8 border-4 border-cyan-500 border-t-transparent rounded-full mx-auto mb-3"></div>
                 <p className="text-sm font-medium">Loading test catalog from OneCrack Database...</p>
               </div>
+            ) : filteredTests.length === 0 ? (
+              <div className="py-12 text-center text-slate-500 text-sm">
+                No tests available for <strong>{subjectFilter}</strong>. Check back later or ask admin to publish one.
+              </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                {tests.map((test) => {
+                {filteredTests.map((test) => {
                   const latestSub = getTestLatestSubmission(test.id);
                   const isCompleted = !!latestSub;
 

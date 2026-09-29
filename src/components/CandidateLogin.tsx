@@ -47,7 +47,7 @@ export const CandidateLogin: React.FC<CandidateLoginProps> = ({
   onStartExam,
   onOpenDashboard 
 }) => {
-  const [activeTab, setActiveTab] = useState<'login' | 'register'>('login');
+  const [activeTab, setActiveTab] = useState<'login' | 'register' | 'reset'>('login');
   const [activeCandidate, setActiveCandidate] = useState<StudentProfile | null>(null);
 
   // Login form state (Empty by default per requirements)
@@ -62,10 +62,23 @@ export const CandidateLogin: React.FC<CandidateLoginProps> = ({
   const [regPassword, setRegPassword] = useState('');
   const [regConfirmPassword, setRegConfirmPassword] = useState('');
   const [regGender, setRegGender] = useState('Male');
+  const [regOtp, setRegOtp] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpVerified, setOtpVerified] = useState(false);
+  const [otpSending, setOtpSending] = useState(false);
+
+  // Password reset state
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetOtp, setResetOtp] = useState('');
+  const [resetNewPassword, setResetNewPassword] = useState('');
+  const [resetConfirmPassword, setResetConfirmPassword] = useState('');
+  const [resetOtpSent, setResetOtpSent] = useState(false);
+  const [resetSuccess, setResetSuccess] = useState(false);
 
   // Status & modal states
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [hasAgreedDeclaration, setHasAgreedDeclaration] = useState(false);
   const [isConnectingDb, setIsConnectingDb] = useState(false);
   const [isDbOnline, setIsDbOnline] = useState<boolean | null>(null);
@@ -145,6 +158,10 @@ export const CandidateLogin: React.FC<CandidateLoginProps> = ({
       setErrorMessage("Password and confirmation do not match.");
       return;
     }
+    if (!otpVerified) {
+      setErrorMessage("Please verify your email with the OTP sent from OneCrack Test Portal before registering.");
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -174,6 +191,131 @@ export const CandidateLogin: React.FC<CandidateLoginProps> = ({
     }
   };
 
+
+  const handleSendRegistrationOtp = async () => {
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    if (!regEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(regEmail.trim())) {
+      setErrorMessage('Enter a valid email address to receive OTP.');
+      return;
+    }
+    setOtpSending(true);
+    try {
+      const res = await fetch('/api/auth/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: regEmail.trim(), purpose: 'registration' })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'Failed to send OTP');
+      setOtpSent(true);
+      setSuccessMessage(`OTP sent to ${regEmail.trim()}. Check your inbox (and spam).`);
+    } catch (err: any) {
+      setErrorMessage(err?.message || 'Could not send OTP. Ensure the server is running.');
+    } finally {
+      setOtpSending(false);
+    }
+  };
+
+  const handleVerifyRegistrationOtp = async () => {
+    setErrorMessage(null);
+    if (!regOtp.trim()) {
+      setErrorMessage('Enter the 6-digit OTP received by email.');
+      return;
+    }
+    try {
+      const res = await fetch('/api/auth/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: regEmail.trim(), code: regOtp.trim() })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'Invalid OTP');
+      setOtpVerified(true);
+      setSuccessMessage('Email verified successfully. You may complete registration.');
+    } catch (err: any) {
+      setErrorMessage(err?.message || 'OTP verification failed.');
+    }
+  };
+
+  const handleSendResetOtp = async () => {
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    if (!resetEmail.trim()) {
+      setErrorMessage('Enter your registered email.');
+      return;
+    }
+    setOtpSending(true);
+    try {
+      const res = await fetch('/api/auth/password-reset-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: resetEmail.trim() })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'Failed to send reset OTP');
+      setResetOtpSent(true);
+      setSuccessMessage(`Password reset OTP sent to ${resetEmail.trim()}.`);
+    } catch (err: any) {
+      setErrorMessage(err?.message || 'Could not send reset OTP.');
+    } finally {
+      setOtpSending(false);
+    }
+  };
+
+  const handleConfirmPasswordReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    if (resetNewPassword.length < 6) {
+      setErrorMessage('New password must be at least 6 characters.');
+      return;
+    }
+    if (resetNewPassword !== resetConfirmPassword) {
+      setErrorMessage('Passwords do not match.');
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      const res = await fetch('/api/auth/password-reset-confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: resetEmail.trim(), code: resetOtp.trim(), newPassword: resetNewPassword })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'Reset failed');
+
+      // Update local registered users password map
+      const usersRaw = localStorage.getItem('cbt_registered_users');
+      if (usersRaw) {
+        const userMap = JSON.parse(usersRaw);
+        const emailKey = resetEmail.trim().toLowerCase();
+        for (const k of Object.keys(userMap)) {
+          const entry = userMap[k];
+          if (entry?.profile?.email?.toLowerCase() === emailKey || k.toLowerCase() === emailKey) {
+            entry.passwordHash = resetNewPassword;
+            userMap[k] = entry;
+          }
+        }
+        localStorage.setItem('cbt_registered_users', JSON.stringify(userMap));
+      }
+      setResetSuccess(true);
+      setSuccessMessage('Password updated successfully. You can now log in.');
+      setTimeout(() => {
+        setActiveTab('login');
+        setResetSuccess(false);
+        setResetOtpSent(false);
+        setResetOtp('');
+        setResetNewPassword('');
+        setResetConfirmPassword('');
+      }, 2000);
+    } catch (err: any) {
+      setErrorMessage(err?.message || 'Password reset failed.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleGoogleSignIn = async () => {
     setErrorMessage(null);
     setIsSubmitting(true);
@@ -186,7 +328,7 @@ export const CandidateLogin: React.FC<CandidateLoginProps> = ({
       const fallbackProfile: StudentProfile = {
         uid: fallbackRoll,
         name: 'Google Verified Aspirant',
-        email: 'onecracktestportal@gmail.com',
+        email: '',
         category: 'General / Unreserved (UR)',
         applicationNumber: `NEET2026-G-${Math.floor(10000 + Math.random() * 90000)}`,
         rollNumber: fallbackRoll,
@@ -297,10 +439,10 @@ export const CandidateLogin: React.FC<CandidateLoginProps> = ({
           <div className="max-w-md mx-auto w-full bg-slate-950/90 border border-slate-800 rounded-2xl shadow-2xl p-6 sm:p-8 backdrop-blur-xl relative">
             
             {/* Tab Switcher */}
-            <div className="grid grid-cols-2 gap-1 bg-slate-900 p-1 rounded-xl mb-6 border border-slate-800">
+            <div className="grid grid-cols-3 gap-1 bg-slate-900 p-1 rounded-xl mb-6 border border-slate-800">
               <button
                 type="button"
-                onClick={() => { setActiveTab('login'); setErrorMessage(null); }}
+                onClick={() => { setActiveTab('login'); setErrorMessage(null); setSuccessMessage(null); }}
                 className={`py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${
                   activeTab === 'login'
                     ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-600/30'
@@ -308,11 +450,11 @@ export const CandidateLogin: React.FC<CandidateLoginProps> = ({
                 }`}
               >
                 <LogIn className="w-3.5 h-3.5" />
-                <span>Candidate Sign In</span>
+                <span>Sign In</span>
               </button>
               <button
                 type="button"
-                onClick={() => { setActiveTab('register'); setErrorMessage(null); }}
+                onClick={() => { setActiveTab('register'); setErrorMessage(null); setSuccessMessage(null); }}
                 className={`py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${
                   activeTab === 'register'
                     ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-600/30'
@@ -320,7 +462,19 @@ export const CandidateLogin: React.FC<CandidateLoginProps> = ({
                 }`}
               >
                 <UserPlus className="w-3.5 h-3.5" />
-                <span>New Registration</span>
+                <span>Register</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => { setActiveTab('reset'); setErrorMessage(null); setSuccessMessage(null); }}
+                className={`py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${
+                  activeTab === 'reset'
+                    ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-600/30'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Lock className="w-3.5 h-3.5" />
+                <span>Reset PW</span>
               </button>
             </div>
 
@@ -328,6 +482,12 @@ export const CandidateLogin: React.FC<CandidateLoginProps> = ({
               <div className="mb-4 p-3 bg-rose-950/60 border border-rose-800/80 rounded-xl text-rose-300 text-xs flex items-start gap-2">
                 <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" />
                 <span>{errorMessage}</span>
+              </div>
+            )}
+            {successMessage && (
+              <div className="mb-4 p-3 bg-emerald-950/60 border border-emerald-800/80 rounded-xl text-emerald-300 text-xs flex items-start gap-2">
+                <CheckSquare className="w-4 h-4 shrink-0 mt-0.5 text-emerald-400" />
+                <span>{successMessage}</span>
               </div>
             )}
 
@@ -448,11 +608,56 @@ export const CandidateLogin: React.FC<CandidateLoginProps> = ({
                   <input
                     type="email"
                     value={regEmail}
-                    onChange={(e) => setRegEmail(e.target.value)}
+                    onChange={(e) => { setRegEmail(e.target.value); setOtpSent(false); setOtpVerified(false); setRegOtp(''); }}
                     placeholder="candidate@example.com"
                     required
+                    type="email"
                     className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-white text-xs placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500"
                   />
+                </div>
+
+                {/* Email OTP Verification */}
+                <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
+                      <Mail className="w-3.5 h-3.5 text-cyan-400" />
+                      Email OTP Verification (from OneCrack Portal)
+                    </span>
+                    {otpVerified && (
+                      <span className="text-[10px] font-bold text-emerald-400 flex items-center gap-1">
+                        <CheckSquare className="w-3 h-3" /> Verified
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={handleSendRegistrationOtp}
+                      disabled={otpSending || otpVerified}
+                      className="px-3 py-1.5 text-[11px] font-bold rounded-lg bg-cyan-700 hover:bg-cyan-600 text-white disabled:opacity-40 cursor-pointer"
+                    >
+                      {otpSending ? 'Sending...' : otpSent ? 'Resend OTP' : 'Send OTP'}
+                    </button>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={6}
+                      value={regOtp}
+                      onChange={(e) => setRegOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      placeholder="6-digit OTP"
+                      disabled={otpVerified}
+                      className="flex-1 px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-white text-xs tracking-widest font-mono focus:outline-none focus:ring-2 focus:ring-cyan-500 disabled:opacity-50"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleVerifyRegistrationOtp}
+                      disabled={otpVerified || regOtp.length !== 6}
+                      className="px-3 py-1.5 text-[11px] font-bold rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white disabled:opacity-40 cursor-pointer"
+                    >
+                      Verify
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-slate-500">OTP is sent from <span className="text-cyan-400 font-mono">onecracktestportal@gmail.com</span>. Valid 10 minutes.</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
@@ -522,14 +727,91 @@ export const CandidateLogin: React.FC<CandidateLoginProps> = ({
                 <div className="pt-2">
                   <button
                     type="submit"
-                    disabled={isSubmitting}
-                    className="w-full py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl text-xs shadow-lg shadow-emerald-600/30 transition-all cursor-pointer flex items-center justify-center gap-2"
+                    disabled={isSubmitting || !otpVerified}
+                    className="w-full py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl text-xs shadow-lg shadow-emerald-600/30 transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
                   >
                     {isSubmitting ? <span>Registering...</span> : <span>Complete Registration (Generates OC Roll No)</span>}
                   </button>
+                  {!otpVerified && (
+                    <p className="text-[10px] text-amber-400/90 text-center mt-2">Verify email OTP before completing registration.</p>
+                  )}
                 </div>
               </form>
-            )}
+            ) : activeTab === 'reset' ? (
+              <form onSubmit={handleConfirmPasswordReset} className="space-y-4">
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Enter your registered email. We will send a one-time code from <span className="text-cyan-400 font-mono">onecracktestportal@gmail.com</span> to reset your password securely.
+                </p>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">Registered Email</label>
+                  <input
+                    type="email"
+                    value={resetEmail}
+                    onChange={(e) => { setResetEmail(e.target.value); setResetOtpSent(false); }}
+                    placeholder="your@email.com"
+                    required
+                    className="w-full px-3 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-white text-xs focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSendResetOtp}
+                  disabled={otpSending}
+                  className="w-full py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs font-bold text-slate-200 cursor-pointer"
+                >
+                  {otpSending ? 'Sending OTP...' : resetOtpSent ? 'Resend Reset OTP' : 'Send Password Reset OTP'}
+                </button>
+                {resetOtpSent && (
+                  <>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">OTP Code</label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={6}
+                        value={resetOtp}
+                        onChange={(e) => setResetOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                        placeholder="6-digit OTP"
+                        required
+                        className="w-full px-3 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-white text-xs tracking-widest font-mono focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">New Password</label>
+                      <input
+                        type="password"
+                        value={resetNewPassword}
+                        onChange={(e) => setResetNewPassword(e.target.value)}
+                        placeholder="Min 6 characters"
+                        required
+                        className="w-full px-3 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-white text-xs focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">Confirm New Password</label>
+                      <input
+                        type="password"
+                        value={resetConfirmPassword}
+                        onChange={(e) => setResetConfirmPassword(e.target.value)}
+                        placeholder="Repeat new password"
+                        required
+                        className="w-full px-3 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-white text-xs focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="w-full py-2.5 bg-gradient-to-r from-rose-600 to-orange-600 hover:from-rose-500 hover:to-orange-500 text-white font-bold rounded-xl text-xs shadow-lg cursor-pointer disabled:opacity-50"
+                    >
+                      {isSubmitting ? 'Updating...' : 'Verify OTP & Set New Password'}
+                    </button>
+                  </>
+                )}
+                {resetSuccess && (
+                  <p className="text-xs text-emerald-400 text-center font-semibold">Password updated. Redirecting to Sign In...</p>
+                )}
+              </form>
+            ) : null}
 
           </div>
         ) : (

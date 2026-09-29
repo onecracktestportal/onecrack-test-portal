@@ -202,6 +202,9 @@ export async function loginStudentWithCredentials(
     const userMap: Record<string, { profile: StudentProfile; passwordHash?: string }> = JSON.parse(usersRaw);
     const found = userMap[trimmed] || userMap[trimmed.toLowerCase()] || userMap[trimmed.toUpperCase()];
     if (found) {
+      if (password && found.passwordHash && found.passwordHash !== password && found.passwordHash !== 'default') {
+        throw new Error('Incorrect password. Use Reset PW tab if you forgot it.');
+      }
       localStorage.setItem('cbt_active_student', JSON.stringify(found.profile));
       return found.profile;
     }
@@ -530,6 +533,34 @@ export function subscribeToAvailableTests(callback: (tests: TestDefinition[]) =>
 }
 
 // Fetch all available tests (combines default syllabus tests with custom/AI generated tests)
+export async function deleteTestDefinition(testId: string): Promise<boolean> {
+  try {
+    // Remove from local cache of tests
+    const localRaw = localStorage.getItem('cbt_available_tests');
+    if (localRaw) {
+      const list = JSON.parse(localRaw) as TestDefinition[];
+      const filtered = list.filter(t => t.id !== testId);
+      localStorage.setItem('cbt_available_tests', JSON.stringify(filtered));
+    }
+    // Attempt Firestore delete
+    try {
+      const { deleteDoc } = await import('firebase/firestore');
+      await deleteDoc(doc(db, 'tests', testId));
+    } catch (e) {
+      console.warn('Firestore delete non-fatal:', e);
+    }
+    try {
+      await fetch(`/api/sql/tests/${encodeURIComponent(testId)}`, { method: 'DELETE' });
+    } catch {
+      // optional SQL
+    }
+    return true;
+  } catch (err) {
+    console.error('deleteTestDefinition failed', err);
+    return false;
+  }
+}
+
 export async function fetchAvailableTests(): Promise<TestDefinition[]> {
   const allTests: TestDefinition[] = [...DEFAULT_AVAILABLE_TESTS];
 
