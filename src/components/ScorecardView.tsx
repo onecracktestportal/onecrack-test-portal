@@ -138,7 +138,7 @@ export const ScorecardView: React.FC<ScorecardViewProps> = ({
 
     setEmailStatus('sending');
     try {
-      const res = await sendScorecardEmail(submission, recipientEmail.trim());
+      const res = await sendScorecardEmail(submission, recipientEmail.trim(), questions);
       if (res.success) {
         setEmailStatus('sent');
         setEmailMessage(`Scorecard successfully dispatched to ${recipientEmail.trim()}`);

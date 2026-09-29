@@ -60,3 +60,10 @@ Email/OTP hit `/api/*` on the same origin via Express.
 ## License
 
 Private — OneCrack Test Portal © 2026
+
+
+## Brand assets
+
+- Logo (Gmail / social profile): [`public/onecrack-logo.svg`](public/onecrack-logo.svg)
+- To set as Gmail profile photo: open the SVG in a browser → screenshot or export as PNG 512×512 → Google Account → Personal info → Picture.
+

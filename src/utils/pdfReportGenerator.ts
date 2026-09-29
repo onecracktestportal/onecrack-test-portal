@@ -271,44 +271,45 @@ export function generateOneCrackPDFReport({
       qY += splitOpt.length * 3.8 + 1;
     });
 
-    // Evaluation Pill & Peer Stats Representation
+    // Evaluation Pill & Peer Stats (difficulty, PYQ year, expected time, peer %)
     const peerAccuracy = q.peerStats?.correctPercent || (q.difficulty === 'Easy' ? 78 : q.difficulty === 'Medium' ? 58 : 38);
     const avgTime = q.peerStats?.avgTimeSpentSeconds || 42;
+    const difficulty = q.difficulty || 'Medium';
+    const pyqYear = q.pyqYear || 'NEET Trend';
 
     doc.setFillColor(248, 250, 252);
     doc.setDrawColor(226, 232, 240);
-    doc.roundedRect(18, qY, pageWidth - 36, 12, 1.5, 1.5, 'FD');
+    doc.roundedRect(18, qY, pageWidth - 36, 16, 1.5, 1.5, 'FD');
 
     doc.setFontSize(6.8);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(15, 23, 42);
     doc.text(
-      `Correct Answer: Option ${q.correctAnswer} [Code: ${correctOpt?.optionCode || q.correctAnswer}]`,
+      `Correct: Option ${q.correctAnswer} [${correctOpt?.optionCode || q.correctAnswer}]  |  Your Choice: ${isAttempted ? `Option ${studentResp}` : '—'}  |  Marks: ${!isAttempted ? '0.00' : isCorrect ? '+4.00' : '-1.00'}`,
       22,
-      qY + 4.2
+      qY + 4
     );
 
-    doc.setTextColor(!isAttempted ? 100 : isCorrect ? 5 : 220, !isAttempted ? 116 : isCorrect ? 150 : 38, !isAttempted ? 139 : isCorrect ? 105 : 38);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(71, 85, 105);
     doc.text(
-      `Candidate Choice: ${isAttempted ? `Option ${studentResp} [Code: ${chosenOpt?.optionCode || studentResp}]` : 'Unattempted'} • Evaluation: ${!isAttempted ? '0.00' : isCorrect ? '+4.00 Marks' : '-1.00 Mark'}`,
+      `Difficulty: ${difficulty}  ·  PYQ / Year: ${pyqYear}  ·  Expected time: ${avgTime}s  ·  Students correct (avg): ${peerAccuracy}%`,
       22,
       qY + 8.5
     );
 
-    // Peer Accuracy Bar Representation
     doc.setTextColor(2, 132, 199);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Expected Peer Accuracy: ${peerAccuracy}% | Avg Candidate Time: ${avgTime}s`, 115, qY + 4.2);
-
-    // Mini Peer Accuracy Bar
-    const barWidth = 40;
+    doc.text(`Peer accuracy`, 22, qY + 13);
+    const barWidth = 50;
     const filledWidth = (peerAccuracy / 100) * barWidth;
     doc.setFillColor(226, 232, 240);
-    doc.rect(115, qY + 6, barWidth, 2.5, 'F');
+    doc.rect(42, qY + 11.2, barWidth, 2.2, 'F');
     doc.setFillColor(2, 132, 199);
-    doc.rect(115, qY + 6, filledWidth, 2.5, 'F');
+    doc.rect(42, qY + 11.2, filledWidth, 2.2, 'F');
+    doc.setTextColor(100, 116, 139);
+    doc.text(`${peerAccuracy}%`, 95, qY + 13);
 
-    qY += 15;
+    qY += 19;
 
     // NCERT Citation & Explanation Box
     doc.setTextColor(71, 85, 105);

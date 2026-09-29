@@ -382,14 +382,27 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                           <span>{isCompleted ? 'Retake Examination' : 'Start CBT Examination'}</span>
                         </button>
 
-                        <button
-                          onClick={() => onOpenAnswerKey(test, latestSub)}
-                          className="flex items-center gap-1.5 px-3 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-xs rounded-xl border border-slate-300 dark:border-slate-700 transition-colors"
-                          title="Preview or Download Detailed Evaluation Matrix & Option IDs"
-                        >
-                          <FileText className="w-3.5 h-3.5 text-cyan-600" />
-                          <span>Detailed Answer Key</span>
-                        </button>
+                        {isCompleted ? (
+                          <button
+                            onClick={() => onOpenAnswerKey(test, latestSub)}
+                            className="flex items-center gap-1.5 px-3 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-xs rounded-xl border border-slate-300 dark:border-slate-700 transition-colors"
+                            title="View your detailed evaluation matrix after attempting this test"
+                          >
+                            <FileText className="w-3.5 h-3.5 text-cyan-600" />
+                            <span>Detailed Answer Key</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled
+                            className="flex items-center gap-1.5 px-3 py-2.5 bg-slate-50 dark:bg-slate-900 text-slate-400 dark:text-slate-600 font-semibold text-xs rounded-xl border border-slate-200 dark:border-slate-800 cursor-not-allowed opacity-70"
+                            title="Complete the test first to unlock the answer key"
+                          >
+                            <Lock className="w-3.5 h-3.5" />
+                            <span>Answer Key Locked</span>
+                          </button>
+                        )}
+
                       </div>
 
                     </div>
