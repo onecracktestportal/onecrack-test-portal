@@ -51,29 +51,78 @@ export async function testFirestoreConnection(): Promise<boolean> {
   }
 }
 
-// Google Sign-In with Firebase Auth
+/** Map Firebase Auth / OAuth error codes to candidate-friendly messages. Never invent guest profiles. */
+export function mapAuthError(err: unknown): string {
+  const code = (err as { code?: string })?.code || '';
+  const message = (err as { message?: string })?.message || '';
+
+  const map: Record<string, string> = {
+    'auth/popup-closed-by-user': 'Google sign-in was cancelled. Close any blocker and try again, or use email registration.',
+    'auth/cancelled-popup-request': 'Another sign-in popup is already open. Finish or close it, then retry.',
+    'auth/popup-blocked': 'Your browser blocked the Google sign-in popup. Allow popups for this site and try again.',
+    'auth/unauthorized-domain': 'This website domain is not authorized for Google sign-in. Add it in Firebase Console → Authentication → Settings → Authorized domains.',
+    'auth/operation-not-allowed': 'Google sign-in is not enabled. Enable the Google provider in Firebase Console → Authentication → Sign-in method.',
+    'auth/account-exists-with-different-credential': 'An account already exists with this email using a different sign-in method. Use email/password login or reset password.',
+    'auth/network-request-failed': 'Network error during Google sign-in. Check your connection and retry.',
+    'auth/internal-error': 'Google sign-in failed due to a temporary service error. Please try again in a moment.',
+    'auth/invalid-api-key': 'Authentication configuration error (invalid API key). Contact the portal administrator.',
+    'auth/app-not-authorized': 'This app is not authorized for Google sign-in. Check Firebase / OAuth client settings.',
+    'auth/user-disabled': 'This Google account has been disabled for the portal.',
+    'auth/too-many-requests': 'Too many failed attempts. Please wait a few minutes and try again.',
+    'auth/invalid-credential': 'Invalid credentials. Please try again or register with email OTP.',
+    'auth/wrong-password': 'Incorrect password.',
+    'auth/user-not-found': 'No account found for these credentials. Please register first.',
+    'auth/email-already-in-use': 'This email is already registered. Sign in instead, or use password reset.',
+    'auth/weak-password': 'Password is too weak. Use at least 6 characters.',
+    'auth/invalid-email': 'Please enter a valid email address.',
+  };
+
+  if (code && map[code]) return map[code];
+  if (message.toLowerCase().includes('popup')) {
+    return 'Google sign-in popup could not complete. Allow popups or use Register with email OTP.';
+  }
+  if (code) return `Sign-in failed (${code}). Use email registration if the problem continues.`;
+  return message || 'Sign-in failed. Please try again or register with email OTP.';
+}
+
+// Google Sign-In with Firebase Auth — throws mapped errors; never creates fake guest profiles
 export async function signInWithGoogle(): Promise<{ user: FirebaseUser; profile: StudentProfile }> {
-  const result = await signInWithPopup(auth, googleProvider);
-  const user = result.user;
-  
-  // Look up if user already registered in Firestore
-  const studentRef = doc(db, 'students', user.uid);
-  const snap = await getDoc(studentRef);
-  
-  if (snap.exists()) {
-    const data = snap.data() as StudentProfile;
-    localStorage.setItem('cbt_active_student', JSON.stringify(data));
-    return { user, profile: data };
-  } else {
-    // Generate new student profile with strict OC Roll number
-    const cleanAppNo = `NEET2026-NTA-${Math.floor(100000 + Math.random() * 900000)}`;
+  try {
+    googleProvider.setCustomParameters({ prompt: 'select_account' });
+    const result = await signInWithPopup(auth, googleProvider);
+    const user = result.user;
+
+    if (!user?.uid) {
+      throw new Error('Google sign-in did not return a valid user. Please try again.');
+    }
+
+    if (!user.email) {
+      throw new Error('Your Google account has no email. Use Register with a valid email and OTP instead.');
+    }
+
+    const studentRef = doc(db, 'students', user.uid);
+    let snap;
+    try {
+      snap = await getDoc(studentRef);
+    } catch (fsErr) {
+      console.warn('Firestore profile lookup after Google auth:', fsErr);
+      snap = null;
+    }
+
+    if (snap && snap.exists()) {
+      const data = snap.data() as StudentProfile;
+      localStorage.setItem('cbt_active_student', JSON.stringify(data));
+      return { user, profile: data };
+    }
+
+    const ocRoll = generateOCRollNumber();
     const newProfile: StudentProfile = {
       uid: user.uid,
-      name: user.displayName || 'Candidate Aspirant',
-      email: user.email || 'onecracktestportal@gmail.com',
+      name: user.displayName || user.email.split('@')[0] || 'Candidate',
+      email: user.email,
       category: 'General / Unreserved (UR)',
-      applicationNumber: cleanAppNo,
-      rollNumber: generateOCRollNumber(),
+      applicationNumber: `NEET2026-G-${Math.floor(100000 + Math.random() * 900000)}`,
+      rollNumber: ocRoll,
       photoUrl: user.photoURL || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250',
       systemId: `LAB-02 / NODE-${Math.floor(10 + Math.random() * 89)}`,
       examCenter: 'OneCrack Central Assessment Center - Center Code: OC-DL01',
@@ -81,9 +130,31 @@ export async function signInWithGoogle(): Promise<{ user: FirebaseUser; profile:
       isRegistered: true,
       registeredAt: new Date().toISOString()
     };
-    await setDoc(studentRef, newProfile);
+
+    try {
+      await setDoc(studentRef, newProfile);
+    } catch (saveErr) {
+      console.warn('Could not persist Google profile to Firestore; using session profile only:', saveErr);
+    }
+
+    // Also index in local registered users for password-less Google sessions
+    try {
+      const usersRaw = localStorage.getItem('cbt_registered_users');
+      const userMap: Record<string, { profile: StudentProfile; passwordHash?: string }> = usersRaw ? JSON.parse(usersRaw) : {};
+      userMap[user.uid] = { profile: newProfile, passwordHash: 'google-oauth' };
+      userMap[user.email.toLowerCase()] = { profile: newProfile, passwordHash: 'google-oauth' };
+      userMap[ocRoll] = { profile: newProfile, passwordHash: 'google-oauth' };
+      localStorage.setItem('cbt_registered_users', JSON.stringify(userMap));
+    } catch {
+      // ignore
+    }
+
     localStorage.setItem('cbt_active_student', JSON.stringify(newProfile));
     return { user, profile: newProfile };
+  } catch (err) {
+    const friendly = mapAuthError(err);
+    console.error('[OneCrack OAuth]', (err as { code?: string })?.code || err, friendly);
+    throw new Error(friendly);
   }
 }
 
