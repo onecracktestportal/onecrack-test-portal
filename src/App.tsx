@@ -439,6 +439,7 @@ export default function App() {
           }}
           onViewPastResults={() => setIsPastResultsOpen(true)}
         />
+        </div>
       )}
 
       {/* 2. Main Student Test Portal Dashboard */}
