@@ -21,3 +21,41 @@
     display: block !important;
   }
 }
+
+
+/* Subtle diagonal portal watermark over content */
+.portal-watermark {
+  position: relative;
+}
+.portal-watermark::before {
+  content: "ONE CRACK TEST PORTAL  ·  NEET CBT";
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(1.25rem, 4vw, 2.5rem);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: rgba(15, 23, 42, 0.04);
+  transform: rotate(-28deg);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.page-fade-enter {
+  animation: pageFadeIn 0.45s ease-out both;
+}
+@keyframes pageFadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.page-fade-exit {
+  animation: pageFadeOut 0.3s ease-in both;
+}
+@keyframes pageFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; transform: translateY(-6px); }
+}

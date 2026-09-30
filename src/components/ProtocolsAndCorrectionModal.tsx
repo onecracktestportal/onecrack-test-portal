@@ -82,7 +82,7 @@ export const ProtocolsAndCorrectionModal: React.FC<ProtocolsAndCorrectionModalPr
             </div>
             <div>
               <h3 className="font-bold text-lg text-white flex items-center gap-2">
-                NTA Profile Lock & Examination Protocols
+                NEET (UG) Profile Lock & Examination Protocols
                 <span className="text-xs bg-amber-500/20 text-amber-300 font-semibold px-2 py-0.5 rounded border border-amber-500/30">
                   Rule 4.2 Enforced
                 </span>
@@ -124,7 +124,7 @@ export const ProtocolsAndCorrectionModal: React.FC<ProtocolsAndCorrectionModalPr
             }`}
           >
             <FileText className="w-4 h-4" />
-            Official NTA Examination Protocols
+            Official NEET (UG) / NTA Examination Protocols
           </button>
           <button
             onClick={() => setActiveTab('request')}
@@ -173,10 +173,10 @@ export const ProtocolsAndCorrectionModal: React.FC<ProtocolsAndCorrectionModalPr
               <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 hover:border-indigo-200 transition">
                 <div className="flex items-center gap-2 font-bold text-slate-900 mb-2">
                   <div className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs flex items-center justify-center font-bold">3</div>
-                  Strict Time Limit (27 Minutes) & Auto-Submission
+                  NEET CBT Timing & Auto-Submission
                 </div>
                 <p className="text-xs text-slate-600 leading-relaxed">
-                  The test clock is synchronized with the server. When the countdown reaches <strong>00:00:00</strong>, the test will automatically compile your responses and push them to the secure evaluation database. No extra time will be provided under any circumstances.
+                  Each mock follows <strong>NEET (UG)</strong> CBT conventions. The timer matches the duration published on the test card (chapter or full-length). When the countdown reaches <strong>00:00:00</strong>, responses are auto-submitted to the evaluation database. No extra time is granted. Plan section-wise pace as in the official NTA NEET exam.
                 </p>
               </div>
 
@@ -195,10 +195,10 @@ export const ProtocolsAndCorrectionModal: React.FC<ProtocolsAndCorrectionModalPr
               <div className="p-4 rounded-xl border border-indigo-100 bg-indigo-50/50">
                 <div className="flex items-center gap-2 font-bold text-indigo-950 mb-1">
                   <Award className="w-4 h-4 text-indigo-600" />
-                  Syllabus Coverage: Unit IX Biotechnology (Class 12 NCERT)
+                  Syllabus Coverage: Full NEET (UG) — Physics, Chemistry & Biology (NTA / NCERT)
                 </div>
                 <p className="text-xs text-indigo-800 leading-relaxed">
-                  Test comprises 50 curated high-difficulty questions: Restriction enzymes, vector pBR322, PCR, agarose gel, stirred-tank bioreactors, downstream processing, Bt crops, RNAi mechanism, recombinant insulin, ADA gene therapy, GEAC ethics, and basmati patent biopiracy.
+                  Syllabus is aligned with the <strong>official NTA NEET (UG)</strong> curriculum based on NCERT Class 11 & 12 for <strong>Physics, Chemistry, and Biology (Botany & Zoology)</strong>. Individual chapter tests may focus on a single subject or unit; full-syllabus mocks cover the complete NEET blueprint. Refer to the NEET Syllabus tab on your dashboard for the unit-wise list.
                 </p>
               </div>
 

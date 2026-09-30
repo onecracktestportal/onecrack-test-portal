@@ -43,7 +43,7 @@ import {
   AreaChart
 } from 'recharts';
 import { sendScorecardEmail, generateScorecardEmailContent } from '../services/emailService';
-import { generateOneCrackPDFReport } from '../utils/pdfReportGenerator';
+import { generateOneCrackPDFReport, generateReportCardPDF, buildAllReportBlobs } from '../utils/pdfReportGenerator';
 import { fetchSubmissionsForStudent } from '../services/firebase';
 import { ProtocolsAndCorrectionModal } from './ProtocolsAndCorrectionModal';
 import { OneCrackLogo } from './OneCrackLogo';
@@ -163,20 +163,21 @@ export const ScorecardView: React.FC<ScorecardViewProps> = ({
     window.print();
   };
 
+  const buildMockTest = () => ({
+    id: submission.testId || 'test-cbt',
+    title: submission.testTitle || 'NEET Examination Assessment',
+    chapter: (questions[0] as any)?.topic || 'NEET Core Curriculum',
+    subject: (questions[0] as any)?.subject || 'Biology',
+    durationMinutes: Math.max(15, Math.round((submission.timeTakenSeconds || 900) / 60) + 5),
+    questionCount: questions.length,
+    markingScheme: { correct: 4, incorrect: -1, unattempted: 0 },
+    questions: questions
+  });
+
   const handleDownloadReport = () => {
     try {
       const roll = submission.rollNumber || student.rollNumber || 'OC-ASPIRANT';
-      const mockTest: any = {
-        id: submission.testId || 'test-cbt',
-        title: submission.testTitle || 'NEET Examination Assessment',
-        chapter: 'NEET Core Curriculum',
-        subject: 'NEET-UG CBT',
-        durationMinutes: 27,
-        questionCount: questions.length,
-        markingScheme: { correct: 4, incorrect: -1, unattempted: 0 },
-        questions: questions
-      };
-
+      const mockTest: any = buildMockTest();
       const doc = generateOneCrackPDFReport({
         submission,
         test: mockTest,
@@ -185,11 +186,58 @@ export const ScorecardView: React.FC<ScorecardViewProps> = ({
         candidateAppNo: student.applicationNumber || submission.applicationNumber,
         candidateEmail: student.email || submission.studentEmail
       });
-
-      doc.save(`OneCrack_Official_Scorecard_${roll}_${Date.now()}.pdf`);
+      doc.save(`OneCrack_Detailed_Report_${roll}.pdf`);
     } catch (err) {
       console.error("PDF generation failed, falling back to print:", err);
       window.print();
+    }
+  };
+
+  const handleDownloadReportCard = () => {
+    try {
+      const roll = submission.rollNumber || student.rollNumber || 'OC-ASPIRANT';
+      const card = generateReportCardPDF({
+        submission,
+        test: buildMockTest() as any,
+        candidateName: student.name || submission.studentName,
+        candidateRoll: roll,
+        candidateAppNo: student.applicationNumber || submission.applicationNumber,
+        candidateEmail: student.email || submission.studentEmail,
+        candidateCategory: student.category
+      });
+      card.save(`OneCrack_Report_Card_${roll}.pdf`);
+    } catch (err) {
+      console.error(err);
+      window.print();
+    }
+  };
+
+  const handleDownloadAllReports = async () => {
+    try {
+      const roll = submission.rollNumber || student.rollNumber || 'OC-ASPIRANT';
+      const packs = buildAllReportBlobs({
+        submission,
+        test: buildMockTest() as any,
+        candidateName: student.name || submission.studentName,
+        candidateRoll: roll,
+        candidateAppNo: student.applicationNumber || submission.applicationNumber,
+        candidateEmail: student.email || submission.studentEmail,
+        candidateCategory: student.category
+      });
+      // Download both PDFs (zip optional — multi-file download always works)
+      for (const item of [packs.reportCard, packs.detailed]) {
+        const url = URL.createObjectURL(item.blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = item.filename;
+        a.click();
+        URL.revokeObjectURL(url);
+        await new Promise((r) => setTimeout(r, 400));
+      }
+    } catch (err) {
+      console.error(err);
+      handleDownloadReport();
+      handleDownloadReportCard();
     }
   };
 
@@ -259,18 +307,12 @@ export const ScorecardView: React.FC<ScorecardViewProps> = ({
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 py-6 px-3 sm:px-6 relative overflow-x-hidden">
       
-      {/* Background Repeating Translucent Watermark for PDF / Print */}
-      <div className="hidden print:block fixed inset-0 pointer-events-none z-0 overflow-hidden select-none">
-        <div className="w-full h-full flex flex-col justify-around items-center opacity-[0.06] -rotate-30">
-          <div className="text-8xl font-black text-black uppercase tracking-widest">
-            OneCrack Test Portal
-          </div>
-          <div className="text-8xl font-black text-black uppercase tracking-widest">
-            OneCrack Test Portal
-          </div>
-          <div className="text-8xl font-black text-black uppercase tracking-widest">
-            OneCrack Test Portal
-          </div>
+      {/* Subtle on-screen + print watermark */}
+      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden select-none" aria-hidden>
+        <div className="w-full h-full flex flex-col justify-around items-center opacity-[0.045] -rotate-[28deg]">
+          <div className="text-6xl sm:text-8xl font-black text-slate-900 uppercase tracking-widest">ONE CRACK TEST PORTAL</div>
+          <div className="text-6xl sm:text-8xl font-black text-slate-900 uppercase tracking-widest">NEET CBT · CONFIDENTIAL</div>
+          <div className="text-6xl sm:text-8xl font-black text-slate-900 uppercase tracking-widest">ONE CRACK TEST PORTAL</div>
         </div>
       </div>
 
@@ -290,14 +332,29 @@ export const ScorecardView: React.FC<ScorecardViewProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {/* Primary Download Report Button */}
             <button
-              onClick={handleDownloadReport}
-              className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-bold text-xs rounded-xl shadow-md shadow-cyan-600/30 transition-all cursor-pointer transform hover:-translate-y-0.5"
-              title="Download branded PDF report of student results including questions, answer key, watermark, and copyright"
+              onClick={handleDownloadReportCard}
+              className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-bold text-xs rounded-xl shadow-md shadow-cyan-600/30 transition-all cursor-pointer"
+              title="Official report card PDF"
             >
               <Download className="w-3.5 h-3.5 text-cyan-200" />
-              <span>Download Report</span>
+              <span>Report Card PDF</span>
+            </button>
+            <button
+              onClick={handleDownloadReport}
+              className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs rounded-xl shadow transition-all cursor-pointer"
+              title="Detailed question-wise evaluation PDF"
+            >
+              <FileText className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Detailed Report PDF</span>
+            </button>
+            <button
+              onClick={handleDownloadAllReports}
+              className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs rounded-xl shadow transition-all cursor-pointer"
+              title="Download report card + detailed report"
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>Download All PDFs</span>
             </button>
 
             {onOpenAnswerKey && (

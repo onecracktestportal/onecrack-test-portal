@@ -53,8 +53,21 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   const [tests, setTests] = useState<TestDefinition[]>([]);
   const [pastSubmissions, setPastSubmissions] = useState<ExamSubmission[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'tests' | 'analytics' | 'history' | 'syllabus'>('tests');
+  const [activeTab, setActiveTab] = useState<'tests' | 'analytics' | 'history' | 'syllabus' | 'profile'>('tests');
   const [subjectFilter, setSubjectFilter] = useState<string>('All');
+  // Profile settings
+  const [profName, setProfName] = useState(student.name);
+  const [profEmail, setProfEmail] = useState(student.email || '');
+  const [profUid, setProfUid] = useState(student.uid);
+  const [profGender, setProfGender] = useState(student.gender || 'Male');
+  const [profPassword, setProfPassword] = useState('');
+  const [profNewPassword, setProfNewPassword] = useState('');
+  const [profConfirm, setProfConfirm] = useState('');
+  const [profOtp, setProfOtp] = useState('');
+  const [profOtpSent, setProfOtpSent] = useState(false);
+  const [profMsg, setProfMsg] = useState<string | null>(null);
+  const [profErr, setProfErr] = useState<string | null>(null);
+  const [profSaving, setProfSaving] = useState(false);
 
   useEffect(() => {
     // Real-time tests subscription
@@ -91,7 +104,6 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     : tests.filter(t => (t.subject || '').toLowerCase().includes(subjectFilter.toLowerCase()) ||
         (subjectFilter === 'Biology' && (t.subject || '').toLowerCase().includes('biotech')));
 
-  const bestScore = pastSubmissions.reduce((max, s) => Math.max(max, s.score), 0);
   const avgAccuracy = pastSubmissions.length 
     ? (pastSubmissions.reduce((acc, s) => acc + s.accuracy, 0) / pastSubmissions.length).toFixed(1)
     : '0.0';
@@ -184,14 +196,10 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
             </div>
 
             {/* Quick Metrics Summary */}
-            <div className="grid grid-cols-3 gap-3 bg-white/5 border border-white/10 rounded-xl p-3 text-center">
+            <div className="grid grid-cols-2 gap-3 bg-white/5 border border-white/10 rounded-xl p-3 text-center">
               <div className="px-3 border-r border-white/10">
                 <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-bold">Tests Taken</span>
                 <span className="text-lg font-black text-cyan-400 font-mono">{pastSubmissions.length}</span>
-              </div>
-              <div className="px-3 border-r border-white/10">
-                <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-bold">Best Score</span>
-                <span className="text-lg font-black text-emerald-400 font-mono">{bestScore}/200</span>
               </div>
               <div className="px-3">
                 <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-bold">Avg Accuracy</span>
@@ -253,6 +261,17 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
           >
             <BookOpen className="w-4 h-4" />
             <span>NEET Syllabus (NTA)</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('profile')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+              activeTab === 'profile'
+                ? 'bg-cyan-600 text-white shadow-md shadow-cyan-600/20'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            <User className="w-4 h-4" />
+            <span>Profile Settings</span>
           </button>
         </div>
 
@@ -561,6 +580,151 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 </table>
               </div>
             )}
+          </div>
+        )}
+
+      
+        {/* TAB: PROFILE SETTINGS */}
+        {activeTab === 'profile' && (
+          <div className="space-y-6 max-w-2xl">
+            <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-5">
+              <div>
+                <h2 className="text-base font-bold text-slate-900 dark:text-white">Profile Settings</h2>
+                <p className="text-xs text-slate-500 mt-1">
+                  Update personal details. UID / email changes require OTP verification from One Crack Test Portal.
+                </p>
+              </div>
+
+              {profErr && (
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs">{profErr}</div>
+              )}
+              {profMsg && (
+                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs">{profMsg}</div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 mb-1">Full Name</label>
+                  <input value={profName} onChange={(e) => setProfName(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 mb-1">Gender</label>
+                  <select value={profGender} onChange={(e) => setProfGender(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm">
+                    <option>Male</option><option>Female</option><option>Third Gender</option>
+                  </select>
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold text-slate-600 mb-1">Email</label>
+                  <input type="email" value={profEmail} onChange={(e) => setProfEmail(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-mono" />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold text-slate-600 mb-1">Candidate UID (requires OTP to change)</label>
+                  <input value={profUid} onChange={(e) => setProfUid(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-mono" />
+                  <p className="text-[10px] text-slate-400 mt-1">Current roll: <span className="font-mono text-cyan-600">{student.rollNumber}</span> (immutable)</p>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-3">
+                <p className="text-xs font-bold text-slate-700 dark:text-slate-300">OTP Verification (for UID / sensitive changes)</p>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" disabled={profSaving}
+                    onClick={async () => {
+                      setProfErr(null); setProfMsg(null);
+                      const email = (profEmail || student.email || '').trim();
+                      if (!email) { setProfErr('Enter email to receive OTP'); return; }
+                      try {
+                        const res = await fetch('/api/auth/send-otp', {
+                          method: 'POST', headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ email, purpose: 'profile_update' })
+                        });
+                        const data = await res.json();
+                        if (!res.ok || !data.success) throw new Error(data.error || 'OTP send failed');
+                        setProfOtpSent(true);
+                        setProfMsg(`OTP sent to ${email}`);
+                      } catch (e: any) {
+                        setProfErr(e?.message || 'Could not send OTP');
+                      }
+                    }}
+                    className="px-3 py-1.5 text-xs font-bold rounded-lg bg-cyan-600 text-white hover:bg-cyan-500 disabled:opacity-50">
+                    {profOtpSent ? 'Resend OTP' : 'Send OTP'}
+                  </button>
+                  <input value={profOtp} onChange={(e) => setProfOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    placeholder="6-digit OTP" maxLength={6}
+                    className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-mono tracking-widest w-28" />
+                </div>
+              </div>
+
+              <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-3">
+                <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Change Password (optional)</p>
+                <input type="password" value={profPassword} onChange={(e) => setProfPassword(e.target.value)}
+                  placeholder="Current password" className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm" />
+                <input type="password" value={profNewPassword} onChange={(e) => setProfNewPassword(e.target.value)}
+                  placeholder="New password (min 6)" className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm" />
+                <input type="password" value={profConfirm} onChange={(e) => setProfConfirm(e.target.value)}
+                  placeholder="Confirm new password" className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm" />
+              </div>
+
+              <button type="button" disabled={profSaving}
+                onClick={async () => {
+                  setProfErr(null); setProfMsg(null); setProfSaving(true);
+                  try {
+                    const uidChanged = profUid.trim() !== student.uid;
+                    const emailChanged = (profEmail || '').trim().toLowerCase() !== (student.email || '').toLowerCase();
+                    if (uidChanged || emailChanged) {
+                      if (!profOtp || profOtp.length !== 6) throw new Error('Enter the 6-digit OTP to change UID or email.');
+                      const res = await fetch('/api/auth/verify-otp', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email: (profEmail || student.email || '').trim(), code: profOtp })
+                      });
+                      const data = await res.json();
+                      if (!res.ok || !data.success) throw new Error(data.error || 'OTP verification failed');
+                    }
+                    if (profNewPassword) {
+                      if (profNewPassword.length < 6) throw new Error('New password must be at least 6 characters.');
+                      if (profNewPassword !== profConfirm) throw new Error('New passwords do not match.');
+                    }
+                    const updated = {
+                      ...student,
+                      name: profName.trim() || student.name,
+                      email: (profEmail || student.email || '').trim(),
+                      uid: profUid.trim() || student.uid,
+                      gender: profGender,
+                    };
+                    // Update local registered users map
+                    const usersRaw = localStorage.getItem('cbt_registered_users');
+                    if (usersRaw) {
+                      const userMap = JSON.parse(usersRaw);
+                      const entryKeys = Object.keys(userMap);
+                      for (const k of entryKeys) {
+                        const e = userMap[k];
+                        if (e?.profile?.uid === student.uid || e?.profile?.rollNumber === student.rollNumber) {
+                          e.profile = { ...e.profile, ...updated };
+                          if (profNewPassword) e.passwordHash = profNewPassword;
+                          userMap[k] = e;
+                        }
+                      }
+                      if (uidChanged) {
+                        userMap[updated.uid] = { profile: updated, passwordHash: profNewPassword || 'default' };
+                      }
+                      localStorage.setItem('cbt_registered_users', JSON.stringify(userMap));
+                    }
+                    localStorage.setItem('cbt_active_student', JSON.stringify(updated));
+                    setProfMsg('Profile updated successfully. Reload or re-login if UID changed.');
+                    window.dispatchEvent(new CustomEvent('cbt_students_updated', { detail: updated }));
+                  } catch (e: any) {
+                    setProfErr(e?.message || 'Update failed');
+                  } finally {
+                    setProfSaving(false);
+                  }
+                }}
+                className="w-full py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 text-white text-xs font-bold shadow disabled:opacity-50">
+                {profSaving ? 'Saving…' : 'Save Profile Changes'}
+              </button>
+            </div>
           </div>
         )}
 

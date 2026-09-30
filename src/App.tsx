@@ -383,9 +383,10 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col font-sans select-none text-slate-900">
+    <div className="min-h-screen bg-slate-100 flex flex-col font-sans select-none text-slate-900 portal-watermark">
       {/* 1. Login Phase */}
       {appState === 'login' && (
+        <div key="login" className="page-fade-enter flex-1 flex flex-col">
         <CandidateLogin
           onStartExam={(student) => {
             // Admin never sits exams — always route to control room
@@ -442,6 +443,7 @@ export default function App() {
 
       {/* 4. Active CBT Examination Phase */}
       {appState === 'exam' && currentStudent && (
+        <div key="exam" className="page-fade-enter flex-1 flex flex-col min-h-0">
         <div className="flex-1 flex flex-col h-screen overflow-hidden">
           {/* Header */}
           <CBTHeader
@@ -537,10 +539,12 @@ export default function App() {
             )}
           </div>
         </div>
+        </div>
       )}
 
       {/* 5. Official Scorecard & Results Phase */}
       {appState === 'scorecard' && completedSubmission && currentStudent && (
+        <div key="scorecard" className="page-fade-enter flex-1 flex flex-col">
         <ScorecardView
           submission={completedSubmission}
           questions={questions}
@@ -553,6 +557,7 @@ export default function App() {
             setIsAnswerKeyModalOpen(true);
           }}
         />
+        </div>
       )}
 
       {/* Pre-Submit Summary Confirmation Modal */}
