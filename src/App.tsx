@@ -57,6 +57,10 @@ export default function App() {
   const [currentTestDurationSeconds, setCurrentTestDurationSeconds] = useState<number>(EXAM_CONFIG.totalSeconds);
   const [timeRemainingSeconds, setTimeRemainingSeconds] = useState<number>(EXAM_CONFIG.totalSeconds);
   const examStartTimeRef = useRef<number | null>(null);
+  /** Accumulated seconds per question id */
+  const questionTimeSpentRef = useRef<Record<number, number>>({});
+  /** Timestamp when current question became active */
+  const questionEnteredAtRef = useRef<number>(Date.now());
 
   // Proctoring & Security
   const [tabSwitches, setTabSwitches] = useState<number>(0);
@@ -151,6 +155,8 @@ export default function App() {
     setCurrentTestDurationSeconds(totalSecs);
     setTimeRemainingSeconds(totalSecs);
     examStartTimeRef.current = Date.now();
+    questionTimeSpentRef.current = {};
+    questionEnteredAtRef.current = Date.now();
     setTabSwitches(0);
     setResponses({});
 
@@ -285,6 +291,19 @@ export default function App() {
       submittedAt: new Date().toISOString(),
       responses,
       questionStatuses,
+      questionTimeSpentSeconds: (() => {
+        // Flush active question before snapshot
+        try {
+          const q = questions[currentQuestionIndex];
+          if (q) {
+            const now = Date.now();
+            const deltaSec = Math.max(0, Math.round((now - questionEnteredAtRef.current) / 1000));
+            questionTimeSpentRef.current[q.id] = (questionTimeSpentRef.current[q.id] || 0) + deltaSec;
+            questionEnteredAtRef.current = now;
+          }
+        } catch { /* ignore */ }
+        return { ...questionTimeSpentRef.current };
+      })(),
       topicBreakdown: topicStats
     };
 
@@ -298,8 +317,20 @@ export default function App() {
   };
 
   // Navigations & Option selections
+  const flushCurrentQuestionTime = () => {
+    if (appState !== 'exam' || !questions.length) return;
+    const q = questions[currentQuestionIndex];
+    if (!q) return;
+    const now = Date.now();
+    const deltaSec = Math.max(0, Math.round((now - questionEnteredAtRef.current) / 1000));
+    questionTimeSpentRef.current[q.id] = (questionTimeSpentRef.current[q.id] || 0) + deltaSec;
+    questionEnteredAtRef.current = now;
+  };
+
   const navigateToQuestion = (targetIndex: number) => {
     if (targetIndex < 0 || targetIndex >= questions.length) return;
+
+    flushCurrentQuestionTime();
 
     // Update status of currently left question if unvisited
     const currentQ = questions[currentQuestionIndex];
@@ -320,6 +351,7 @@ export default function App() {
     }
 
     setCurrentQuestionIndex(targetIndex);
+    questionEnteredAtRef.current = Date.now();
   };
 
   const handleSelectOption = (key: 'A' | 'B' | 'C' | 'D') => {

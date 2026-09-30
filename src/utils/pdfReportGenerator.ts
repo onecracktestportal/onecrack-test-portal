@@ -271,9 +271,11 @@ export function generateOneCrackPDFReport({
       qY += splitOpt.length * 3.8 + 1;
     });
 
-    // Evaluation Pill & Peer Stats (difficulty, PYQ year, expected time, peer %)
+    // Evaluation Pill & Peer Stats (your time, expected time, difficulty, PYQ, peer %)
     const peerAccuracy = q.peerStats?.correctPercent || (q.difficulty === 'Easy' ? 78 : q.difficulty === 'Medium' ? 58 : 38);
     const avgTime = q.peerStats?.avgTimeSpentSeconds || 42;
+    const yourTime = submission?.questionTimeSpentSeconds?.[q.id];
+    const yourTimeLabel = yourTime != null && yourTime >= 0 ? `${yourTime}s` : '—';
     const difficulty = q.difficulty || 'Medium';
     const pyqYear = q.pyqYear || 'NEET Trend';
 
@@ -293,7 +295,7 @@ export function generateOneCrackPDFReport({
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(71, 85, 105);
     doc.text(
-      `Difficulty: ${difficulty}  ·  PYQ / Year: ${pyqYear}  ·  Expected time: ${avgTime}s  ·  Students correct (avg): ${peerAccuracy}%`,
+      `Difficulty: ${difficulty}  ·  PYQ: ${pyqYear}  ·  Your time: ${yourTimeLabel}  ·  Expected: ${avgTime}s  ·  Students correct (avg): ${peerAccuracy}%`,
       22,
       qY + 8.5
     );
@@ -356,7 +358,10 @@ export function generateReportCardPDF({
   const timeSec = submission?.timeTakenSeconds ?? 0;
   const tabSwitches = submission?.tabSwitches ?? 0;
   const qCount = questions.length || submission?.totalQuestions || 1;
-  const avgQTime = qCount > 0 ? Math.round(timeSec / qCount) : 0;
+  const timedEntries = Object.values(submission?.questionTimeSpentSeconds || {});
+  const avgQTime = timedEntries.length > 0
+    ? Math.round(timedEntries.reduce((a, b) => a + b, 0) / timedEntries.length)
+    : (qCount > 0 ? Math.round(timeSec / qCount) : 0);
   const subject = test.subject || 'Biology';
   const isSingleSubject = true; // chapter / subject tests focus on one subject
 

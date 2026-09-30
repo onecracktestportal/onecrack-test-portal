@@ -119,6 +119,8 @@ export interface ExamSubmission {
   submittedAt: string;
   responses: Record<number, 'A' | 'B' | 'C' | 'D' | null>;
   questionStatuses?: Record<number, QuestionStatus>;
+  /** Seconds spent on each question id while it was the active question */
+  questionTimeSpentSeconds?: Record<number, number>;
   topicBreakdown: Record<string, { total: number; correct: number; incorrect: number; unattempted: number }>;
 }
 

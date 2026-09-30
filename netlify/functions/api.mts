@@ -296,8 +296,10 @@ export default async (req: Request, _context: Context) => {
           );
           y += 4.5;
           doc.setTextColor(71, 85, 105);
+          const yourT = submission?.questionTimeSpentSeconds?.[q.id];
+          const yourLabel = yourT != null ? `${yourT}s` : '—';
           doc.text(
-            `Difficulty: ${q.difficulty || 'Medium'}  ·  PYQ Year: ${q.pyqYear || 'NEET Trend'}  ·  Expected time: ${avgT}s  ·  Students correct (avg): ${peer}%`,
+            `Difficulty: ${q.difficulty || 'Medium'}  ·  PYQ: ${q.pyqYear || 'NEET Trend'}  ·  Your time: ${yourLabel}  ·  Expected: ${avgT}s  ·  Students correct (avg): ${peer}%`,
             14,
             y
           );
