@@ -23,6 +23,7 @@ import {
   signOut as firebaseSignOut,
   User as FirebaseUser
 } from 'firebase/auth';
+import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { StudentProfile, ExamSubmission, CorrectionRequest, TestDefinition } from '../types/exam';
 import { DEFAULT_AVAILABLE_TESTS } from '../data/defaultTests';
@@ -30,6 +31,7 @@ import { DEFAULT_AVAILABLE_TESTS } from '../data/defaultTests';
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
+export const storage = getStorage(app);
 const googleProvider = new GoogleAuthProvider();
 
 // Strict OC Roll Number Generator: Always "OC" followed by random 6-digit number
@@ -754,4 +756,45 @@ export async function fetchLeaderboard(): Promise<ExamSubmission[]> {
     }
   }
   return [];
+}
+
+
+/** Archive exam result PDFs under result-pdfs/{roll}/{submissionId}/ in Firebase Storage (project cloud, not personal Drive). */
+export async function archiveResultPdfs(
+  submissionId: string,
+  rollNumber: string,
+  files: { filename: string; blob: Blob }[]
+): Promise<{ ok: boolean; urls: string[]; error?: string }> {
+  const urls: string[] = [];
+  try {
+    const roll = (rollNumber || 'UNKNOWN').replace(/[^a-zA-Z0-9._-]/g, '_');
+    const sid = (submissionId || `SUB-${Date.now()}`).replace(/[^a-zA-Z0-9._-]/g, '_');
+    for (const f of files) {
+      const safeName = f.filename.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const path = `result-pdfs/${roll}/${sid}/${safeName}`;
+      const storageRef = ref(storage, path);
+      await uploadBytes(storageRef, f.blob, {
+        contentType: 'application/pdf',
+        customMetadata: {
+          rollNumber: roll,
+          submissionId: sid,
+          archivedAt: new Date().toISOString(),
+        },
+      });
+      const url = await getDownloadURL(storageRef);
+      urls.push(url);
+    }
+    // Persist download links on the submission document when possible
+    try {
+      const subRef = doc(db, 'submissions', submissionId);
+      await setDoc(subRef, { archivedPdfUrls: urls, pdfArchivedAt: new Date().toISOString() }, { merge: true });
+    } catch {
+      // non-blocking
+    }
+    return { ok: true, urls };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn('[OneCrack] PDF cloud archive failed:', msg);
+    return { ok: false, urls, error: msg };
+  }
 }

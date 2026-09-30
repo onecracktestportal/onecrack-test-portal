@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { ExamSubmission, Question, StudentProfile } from '../types/exam';
 import { 
   Trophy, 
@@ -44,6 +44,7 @@ import {
 } from 'recharts';
 import { sendScorecardEmail, generateScorecardEmailContent } from '../services/emailService';
 import { generateOneCrackPDFReport, generateReportCardPDF, buildAllReportBlobs } from '../utils/pdfReportGenerator';
+import { archiveResultPdfs } from '../services/firebase';
 import { fetchSubmissionsForStudent } from '../services/firebase';
 import { ProtocolsAndCorrectionModal } from './ProtocolsAndCorrectionModal';
 import { OneCrackLogo } from './OneCrackLogo';
@@ -68,6 +69,8 @@ export const ScorecardView: React.FC<ScorecardViewProps> = ({
   const [filterType, setFilterType] = useState<'all' | 'correct' | 'incorrect' | 'unattempted'>('all');
   const [expandedQuestionId, setExpandedQuestionId] = useState<number | null>(null);
   const [emailStatus, setEmailStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const [archiveStatus, setArchiveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const archiveAttempted = useRef(false);
   const [emailMessage, setEmailMessage] = useState<string>('');
   const [copiedReport, setCopiedReport] = useState(false);
   const [recipientEmail, setRecipientEmail] = useState(() => {
@@ -173,6 +176,37 @@ export const ScorecardView: React.FC<ScorecardViewProps> = ({
     markingScheme: { correct: 4, incorrect: -1, unattempted: 0 },
     questions: questions
   });
+
+  const runCloudArchive = async () => {
+    if (archiveAttempted.current) return;
+    archiveAttempted.current = true;
+    setArchiveStatus('saving');
+    try {
+      const roll = submission.rollNumber || student.rollNumber || 'OC-ASPIRANT';
+      const packs = buildAllReportBlobs({
+        submission,
+        test: buildMockTest() as any,
+        candidateName: student.name || submission.studentName,
+        candidateRoll: roll,
+        candidateAppNo: student.applicationNumber || submission.applicationNumber,
+        candidateEmail: student.email || submission.studentEmail,
+        candidateCategory: student.category
+      });
+      const res = await archiveResultPdfs(submission.id, roll, [
+        { filename: packs.reportCard.filename, blob: packs.reportCard.blob },
+        { filename: packs.detailed.filename, blob: packs.detailed.blob },
+      ]);
+      setArchiveStatus(res.ok ? 'saved' : 'error');
+    } catch {
+      setArchiveStatus('error');
+    }
+  };
+
+  // Auto-archive report card + detailed report to Firebase Storage (project cloud archive)
+  useEffect(() => {
+    runCloudArchive();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [submission.id]);
 
   const handleDownloadReport = () => {
     try {
@@ -329,6 +363,15 @@ export const ScorecardView: React.FC<ScorecardViewProps> = ({
               <span>Back to Test Portal Dashboard</span>
             </button>
             <OneCrackLogo size="sm" showSubtitle={false} />
+            {archiveStatus === 'saving' && (
+              <span className="text-[10px] text-slate-500 font-medium">Archiving PDFs to cloud…</span>
+            )}
+            {archiveStatus === 'saved' && (
+              <span className="text-[10px] text-emerald-600 font-semibold">PDFs archived to cloud storage</span>
+            )}
+            {archiveStatus === 'error' && (
+              <span className="text-[10px] text-amber-600 font-medium">Cloud archive skipped (download/email still work)</span>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
